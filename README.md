@@ -6,6 +6,7 @@
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-orange)](CHANGELOG.md)
+[![Wiki](https://img.shields.io/badge/docs-wiki-purple)](https://github.com/Noxiidus/tracehound/wiki)
 
 Point it at `/var/log`, a mounted image, or a folder of collected evidence. It parses what it
 recognises, merges everything into one UTC-normalised timeline, and applies detection rules that
@@ -351,10 +352,20 @@ This also verifies every artifact against its collection-time digest before anal
 
 ## Roadmap
 
-- Parsers: `/etc/passwd` and `/etc/shadow` diffing, `sudoers`, `authorized_keys`, systemd units
-- A `Fact` model for state-based artifacts, which have no meaningful timestamp
-- Detections: SSH key manipulation, impossible-travel logins
-- Super-timeline export (`l2tcsv`) for Timesketch interoperability
+Full detail, with reasoning, in [ROADMAP.md](ROADMAP.md).
+
+| Version | Theme |
+|---|---|
+| **0.6.0** | State artifacts and the `Fact` model — `/etc/passwd`, `sudoers`, `authorized_keys`, systemd units |
+| **0.7.0** | Interoperability — `l2tcsv` and Timesketch export, plaso super-timelines as input |
+| **0.8.0** | Sigma rule support, so the community's existing Linux rules run unmodified |
+| **0.9.0** | Scale — streaming parse, optional on-disk timeline, incremental scanning |
+| **1.0.0** | API freeze, rule-ID policy, schema compatibility, PyPI |
+| post-1.0 | Windows artifacts (EVTX, registry, prefetch, MFT) |
+
+Deliberately **not** planned: memory forensics, ML anomaly detection, a live agent, a web
+UI, automated remediation. The [roadmap](ROADMAP.md#considered-and-declined) explains why
+each was declined.
 - Super-timeline export (`l2tcsv`) for Timesketch interoperability
 - Optional YAML rule definitions so detections can be added without writing Python
 
