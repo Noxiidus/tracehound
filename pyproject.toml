@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tracehound"
+version = "0.1.0"
+description = "Linux DFIR triage — parse host artifacts into a unified timeline and surface attacker behaviour"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Katona Balazs", email = "ankara.herho@gmail.com" }]
+keywords = ["dfir", "forensics", "incident-response", "linux", "timeline", "security"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "mypy>=1.10",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+tracehound = "tracehound.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Noxiidus/tracehound"
+Issues = "https://github.com/Noxiidus/tracehound/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tracehound"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test fixtures embed verbatim log lines; wrapping them would obscure the format
+# under test and make mismatches harder to spot.
+"tests/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["tracehound"]
+mypy_path = "src"
+strict = true
+warn_unreachable = true

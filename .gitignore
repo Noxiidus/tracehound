@@ -1,0 +1,29 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Never commit real evidence
+evidence/
+*.pcap
+*.pcapng
+wtmp
+utmp
+btmp
+lastlog
+auth.log
+secure
+
+# Generated output
+out/
+*.tracehound.json
+*.tracehound.html
