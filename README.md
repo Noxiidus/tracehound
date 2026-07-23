@@ -260,6 +260,46 @@ the benign explanations alongside the suspicious one.
 its parser and event count, including the ones that were skipped and why. A triage report that
 cannot say exactly which bytes it read is weak evidence.
 
+## Collection
+
+Something has to gather the evidence before tracehound can read it, and doing that
+correctly is part of the job. [`collect/tracehound-collect.sh`](collect/tracehound-collect.sh)
+is a dependency-free POSIX shell script that runs on the target host:
+
+```bash
+# On a host with a synced clock, note the reference time:
+REF=$(date -u +%Y-%m-%dT%H:%M:%S)
+
+# On the target:
+./tracehound-collect.sh -r "$REF"
+```
+
+It does three things a plain `tar` does not:
+
+**Records the host clock.** Drift can only be measured while the machine is running.
+Captured here, it becomes the `--clock-offset` that turns hedged cross-host orderings
+into established ones — see [the clock problem](#the-clock-problem) below.
+
+**Hashes at collection time.** tracehound also hashes on ingest, but that proves nothing
+about the interval in between, where evidence is copied, staged and moved. Comparing the
+two digests closes that window:
+
+```bash
+tracehound verify ./tracehound-web01-.../manifest.json
+```
+
+A mismatch is reported and, during a case, refuses to proceed without `--skip-verify`.
+Evidence that changed after it left the host is a finding, not an inconvenience.
+
+**Records its own footprint.** Collection touches the host. `footprint.txt` lists every
+command run, because documenting the contamination is better than pretending there was
+none.
+
+Artifacts are taken in volatility order — running processes, network state and logged-in
+users before anything on disk — since that is the evidence that cannot be recovered
+later. Root is not required; without it, unreadable artifacts appear in the manifest's
+`skipped` list rather than silently vanishing.
+
 ## Multi-host investigations
 
 One machine is rarely the whole story. `tracehound case` scans several hosts and reports
@@ -299,6 +339,15 @@ tracehound case --host web01=/ev/web01 --host db01=/ev/db01 \
 Without one, a host is marked `assumed`, and any ordering claim inside five minutes is
 hedged rather than asserted — THN-1003 downgrades itself to a *candidate*, and THN-1004
 explains why. Supply measured offsets and the same findings become conclusions.
+
+If you collected with `tracehound-collect.sh -r`, the offsets are already in the
+manifests and nothing needs supplying by hand:
+
+```bash
+tracehound case --manifest ev/web01/manifest.json --manifest ev/db01/manifest.json
+```
+
+This also verifies every artifact against its collection-time digest before analysing it.
 
 ## Roadmap
 

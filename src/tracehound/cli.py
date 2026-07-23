@@ -13,6 +13,7 @@ from .config import Config, ConfigError
 from .core import scan
 from .detections import all_detections
 from .detections.base import Detection
+from .manifest import Manifest, ManifestError
 from .models import Severity
 from .parsers import all_parsers
 from .rules import RuleError, load_rules
@@ -81,9 +82,23 @@ def build_parser() -> argparse.ArgumentParser:
     case_cmd.add_argument(
         "--host",
         action="append",
-        required=True,
+        default=[],
         metavar="NAME=PATH",
         help="a host's evidence directory or file; repeat for each host",
+    )
+    case_cmd.add_argument(
+        "--manifest",
+        action="append",
+        default=[],
+        type=Path,
+        metavar="MANIFEST",
+        help="a manifest.json from tracehound-collect; supplies the host name and its "
+        "measured clock offset automatically. Repeatable, and combinable with --host",
+    )
+    case_cmd.add_argument(
+        "--skip-verify",
+        action="store_true",
+        help="do not re-hash manifest artifacts before analysis",
     )
     case_cmd.add_argument(
         "--clock-offset",
@@ -101,9 +116,45 @@ def build_parser() -> argparse.ArgumentParser:
     )
     case_cmd.add_argument("-o", "--output", type=Path, help="write to a file instead of stdout")
 
+    verify_cmd = sub.add_parser(
+        "verify",
+        help="check collected evidence against its manifest",
+        description="Re-hash every artifact listed in a collection manifest and compare "
+        "against the digest recorded at collection time. A mismatch means the evidence "
+        "changed after it left the host.",
+    )
+    verify_cmd.add_argument("manifest", type=Path, help="manifest.json from tracehound-collect")
+
     sub.add_parser("parsers", help="list available artifact parsers")
     sub.add_parser("rules", help="list available detection rules")
     return parser
+
+
+def _cmd_verify(args: argparse.Namespace) -> int:
+    try:
+        manifest = Manifest.load(args.manifest)
+    except ManifestError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"host      : {manifest.hostname} (collected by {manifest.collected_by})")
+    print(f"collected : {manifest.started_at} .. {manifest.finished_at}")
+    if manifest.clock_measured:
+        offset = int(manifest.clock_offset.total_seconds())  # type: ignore[union-attr]
+        print(f"clock     : {offset:+d}s — {manifest.clock_note}")
+    else:
+        print(f"clock     : not measured — {manifest.clock_note}")
+    print(f"artifacts : {len(manifest.artifacts)} collected, {len(manifest.skipped)} skipped")
+
+    issues = manifest.verify()
+    if not issues:
+        print(f"\nOK — all {len(manifest.artifacts)} artifact(s) match the manifest.")
+        return 0
+
+    print(f"\nFAILED — {len(issues)} artifact(s) do not match:", file=sys.stderr)
+    for issue in issues:
+        print(f"  {issue.describe()}", file=sys.stderr)
+    return 1
 
 
 def _parse_pairs(values: list[str], what: str) -> dict[str, str] | None:
@@ -118,11 +169,45 @@ def _parse_pairs(values: list[str], what: str) -> dict[str, str] | None:
 
 
 def _cmd_case(args: argparse.Namespace) -> int:
+    if not args.host and not args.manifest:
+        print("error: give at least one --host or --manifest", file=sys.stderr)
+        return 2
+
     hosts = _parse_pairs(args.host, "host")
     if hosts is None:
         return 2
 
     sources: dict[str, list[Path]] = {}
+    offsets: dict[str, timedelta] = {}
+
+    for manifest_path in args.manifest:
+        try:
+            manifest = Manifest.load(manifest_path)
+        except ManifestError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        if not args.skip_verify:
+            issues = manifest.verify()
+            if issues:
+                print(
+                    f"error: {manifest.hostname}: {len(issues)} artifact(s) do not match "
+                    f"the manifest recorded at collection time:",
+                    file=sys.stderr,
+                )
+                for issue in issues:
+                    print(f"  {issue.describe()}", file=sys.stderr)
+                print(
+                    "The evidence changed after it left the host. Investigate the "
+                    "handling chain, or pass --skip-verify to proceed anyway.",
+                    file=sys.stderr,
+                )
+                return 3
+
+        sources.setdefault(manifest.hostname, []).extend(manifest.artifact_paths())
+        if manifest.clock_offset is not None:
+            offsets[manifest.hostname] = manifest.clock_offset
+
     for name, raw_path in hosts.items():
         path = Path(raw_path)
         if not path.exists():
@@ -134,7 +219,6 @@ def _cmd_case(args: argparse.Namespace) -> int:
     if raw_offsets is None:
         return 2
 
-    offsets: dict[str, timedelta] = {}
     for name, seconds in raw_offsets.items():
         if name not in sources:
             print(f"error: --clock-offset names unknown host {name!r}", file=sys.stderr)
@@ -237,6 +321,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_scan(args)
     if args.command == "case":
         return _cmd_case(args)
+    if args.command == "verify":
+        return _cmd_verify(args)
     if args.command == "parsers":
         return _cmd_parsers()
     if args.command == "rules":

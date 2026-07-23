@@ -27,6 +27,7 @@ from typing import Any
 
 from .config import Config
 from .core import ScanResult, scan
+from .manifest import Manifest
 from .models import Event, Finding
 from .timeline import Timeline
 
@@ -174,3 +175,21 @@ def build_case(
 
     case.findings = run_cross_host(case, active)
     return case
+
+
+def build_case_from_manifests(
+    manifests: list[Manifest],
+    *,
+    year: int | None = None,
+    config: Config | None = None,
+) -> Case:
+    """Assemble a case from collection manifests.
+
+    This is the path the clock machinery was built for: the collector measured each
+    host's offset while the machine was still running, so ordering across hosts becomes
+    an established fact rather than a hedged guess. Hosts whose manifest recorded no
+    reference clock stay ``assumed``, exactly as if the offset had been omitted by hand.
+    """
+    sources = {m.hostname: m.artifact_paths() for m in manifests}
+    offsets = {m.hostname: m.clock_offset for m in manifests if m.clock_offset is not None}
+    return build_case(sources, year=year, config=config, offsets=offsets)

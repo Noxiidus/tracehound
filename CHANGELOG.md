@@ -7,6 +7,39 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.5.0] — 2026-07-23
+
+Collection. tracehound could analyse evidence but nothing gathered it, which left two
+things permanently out of reach: the clock offsets the multi-host work needs, and any
+account of what happened to the evidence between the host and the analyst.
+
+### Added
+
+- **`collect/tracehound-collect.sh`** — dependency-free POSIX shell collector. Runs on
+  minimal images and busybox, does not require root, and takes artifacts in volatility
+  order: running processes, network state and logged-in users before anything on disk.
+- **Clock measurement at collection time.** `-r REFERENCE_UTC` records how far the
+  host's clock sits from a trusted source. This is the only moment that measurement can
+  be taken, and it is exactly what `--clock-offset` consumes.
+- **Collection manifest** (`manifest.json`) — every artifact with its source path,
+  size and SHA-256 taken at the moment of collection, plus everything that was skipped
+  and why, and the collector's own footprint.
+- **`tracehound verify MANIFEST`** — re-hashes every artifact and compares against the
+  collection-time digest. Exit 1 on mismatch.
+- **`tracehound case --manifest`** — derives host name and clock offset from manifests,
+  so measured offsets need no manual entry. Verification runs first and refuses to
+  analyse altered evidence (exit 3) unless `--skip-verify` is given.
+- `tracehound.manifest` module and `build_case_from_manifests()` for library use.
+
+### Notes
+
+Hashing on ingest — which tracehound already did — proves only that a file has not
+changed since analysis began. That is the wrong question. The interval that matters is
+between collection and analysis, where evidence is copied, emailed and staged, and only a
+digest taken on the host can close it.
+
+---
+
 ## [0.4.0] — 2026-07-23
 
 Multi-host investigations. Until now tracehound examined one machine at a time, which
@@ -138,6 +171,7 @@ The brute-force rule counts *attempts*, not log lines. A single failed SSH attem
 three or four lines (`Invalid user`, `pam_unix`, `Failed password`), so counting lines
 overstated attacks roughly threefold. Events are deduplicated by connection.
 
+[0.5.0]: https://github.com/Noxiidus/tracehound/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Noxiidus/tracehound/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Noxiidus/tracehound/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Noxiidus/tracehound/releases/tag/v0.2.0
