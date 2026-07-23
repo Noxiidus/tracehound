@@ -44,11 +44,19 @@ tracehound does that correlation mechanically, in UTC, every time.
 
 ## Install
 
+Requires Python 3.10 or newer. No third-party runtime dependencies.
+
 ```bash
-pip install tracehound
+pip install git+https://github.com/Noxiidus/tracehound.git
 ```
 
-From source:
+Pin a specific version if you want reproducibility:
+
+```bash
+pip install git+https://github.com/Noxiidus/tracehound.git@v0.2.0
+```
+
+For development, clone and install in editable mode with the test extras:
 
 ```bash
 git clone https://github.com/Noxiidus/tracehound
