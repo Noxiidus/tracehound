@@ -7,15 +7,12 @@ from collections.abc import Iterator
 from datetime import timedelta
 from typing import ClassVar
 
+from ..config import Config
 from ..models import Event, EventType, Finding, Severity
 from ..timeline import Timeline
 from .base import Detection, register
 
 FAILURE_TYPES = (EventType.LOGIN_FAILURE, EventType.INVALID_USER)
-
-BURST_THRESHOLD = 10
-BURST_WINDOW = timedelta(minutes=1)
-SPRAY_USER_THRESHOLD = 5
 
 
 def _dedupe_attempts(events: list[Event]) -> list[Event]:
@@ -38,10 +35,10 @@ def _dedupe_attempts(events: list[Event]) -> list[Event]:
     return sorted(seen.values(), key=lambda e: e.timestamp)
 
 
-def _group_by_ip(events: list[Event]) -> dict[str, list[Event]]:
+def _group_by_ip(events: list[Event], config: Config) -> dict[str, list[Event]]:
     grouped: dict[str, list[Event]] = defaultdict(list)
     for event in _dedupe_attempts(events):
-        if event.source_ip:
+        if event.source_ip and not config.ip_allowed(event.source_ip):
             grouped[event.source_ip].append(event)
     return grouped
 
@@ -56,13 +53,14 @@ class BruteForceDetection(Detection):
     )
     attack_techniques: ClassVar[list[str]] = ["T1110", "T1110.001"]
 
-    def run(self, timeline: Timeline) -> Iterator[Finding]:
+    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+        window = timedelta(seconds=config.brute_force_window)
         failures = timeline.of_type(*FAILURE_TYPES)
 
-        for ip, events in sorted(_group_by_ip(failures).items()):
+        for ip, events in sorted(_group_by_ip(failures, config).items()):
             events.sort(key=lambda e: e.timestamp)
-            burst = _densest_window(events, BURST_WINDOW)
-            if len(burst) < BURST_THRESHOLD:
+            burst = _densest_window(events, window)
+            if len(burst) < config.brute_force_threshold:
                 continue
 
             users = sorted({e.user for e in events if e.user})
@@ -75,7 +73,7 @@ class BruteForceDetection(Detection):
                 description=(
                     f"{len(events)} authentication failures from {ip} across "
                     f"{_humanise(duration)}, peaking at {len(burst)} within "
-                    f"{int(BURST_WINDOW.total_seconds())}s. "
+                    f"{config.brute_force_window}s. "
                     f"{len(users)} distinct username(s) targeted."
                 ),
                 events=events,
@@ -100,18 +98,18 @@ class SuccessfulBruteForceDetection(Detection):
     )
     attack_techniques: ClassVar[list[str]] = ["T1110", "T1078"]
 
-    def run(self, timeline: Timeline) -> Iterator[Finding]:
-        failures = _group_by_ip(timeline.of_type(*FAILURE_TYPES))
-        successes = _group_by_ip(timeline.of_type(EventType.LOGIN_SUCCESS))
+    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+        failures = _group_by_ip(timeline.of_type(*FAILURE_TYPES), config)
+        successes = _group_by_ip(timeline.of_type(EventType.LOGIN_SUCCESS), config)
 
         for ip, wins in sorted(successes.items()):
             prior = failures.get(ip, [])
-            if len(prior) < BURST_THRESHOLD:
+            if len(prior) < config.brute_force_threshold:
                 continue
 
             for success in sorted(wins, key=lambda e: e.timestamp):
                 preceding = [e for e in prior if e.timestamp < success.timestamp]
-                if len(preceding) < BURST_THRESHOLD:
+                if len(preceding) < config.brute_force_threshold:
                     continue
 
                 yield Finding(
@@ -144,10 +142,11 @@ class PasswordSprayDetection(Detection):
     description: ClassVar[str] = "One source tried many distinct usernames with few attempts each."
     attack_techniques: ClassVar[list[str]] = ["T1110.003"]
 
-    def run(self, timeline: Timeline) -> Iterator[Finding]:
-        for ip, events in sorted(_group_by_ip(timeline.of_type(*FAILURE_TYPES)).items()):
+    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+        grouped = _group_by_ip(timeline.of_type(*FAILURE_TYPES), config)
+        for ip, events in sorted(grouped.items()):
             users = {e.user for e in events if e.user}
-            if len(users) < SPRAY_USER_THRESHOLD:
+            if len(users) < config.spray_user_threshold:
                 continue
             # Spraying is wide and shallow; a deep single-user grind is plain brute force.
             if len(events) / len(users) > 3:

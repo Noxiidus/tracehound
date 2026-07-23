@@ -119,7 +119,14 @@ for event in result.timeline.by_ip("65.2.161.68"):
 | `lastlog` | `lastlog` | 292-byte array indexed by UID. Sparse zero records mean "never logged in" and are skipped. |
 | `shell_history` | `.bash_history`, `.zsh_history` | Handles `HISTTIMEFORMAT` epochs; undated entries are flagged, never silently dated. |
 | `cron` | `cron`, `cron.log` | `CROND` execution records, with the scheduled command extracted. |
+| `journal` | `journalctl -o json` output | JSON Lines or a JSON array. Needed on hosts where `auth.log` does not exist. |
 | `auth.log` | `auth.log`, `secure` | sshd, sudo, PAM, useradd/usermod/groupadd, systemd-logind. Both syslog and ISO-8601 timestamps. |
+
+Collect a journal export with:
+
+```bash
+journalctl -o json --no-pager > journal.json
+```
 
 Parser selection is driven by an explicit `priority`, not import order. A cron log is
 also valid syslog, so it must be offered the file before the catch-all `auth.log` parser
@@ -138,6 +145,70 @@ claims it — and that ordering cannot be left to a formatter's whim.
 | THN-0013 | High | Sensitive sudo command (shadow access, downloads, log destruction, …) | T1548.003 + per-pattern |
 | THN-0020 | Medium | Suspicious command recorded in shell history | T1059.004 + per-pattern |
 | THN-0021 | High | Scheduled task running from a world-writable path, piping downloads to a shell, … | T1053.003 |
+| THN-0030 | Medium | Gap in log coverage — silence in an otherwise active log | T1070.002 |
+| THN-0031 | High | Binary login database truncated mid-record | T1070.002 |
+| THN-0032 | High | Shell history missing for an account that ran privileged commands | T1070.003 |
+
+### Tuning
+
+Run against a real internet-facing host and you will get a brute-force finding every
+single day, because the internet brute-forces every SSH port every day. A report nobody
+reads is worth nothing, so suppression is a first-class feature:
+
+```jsonc
+// tuning.json
+{
+  "known_ips": ["10.0.0.5", "203.0.113.9"],   // jump hosts, monitoring
+  "service_accounts": ["deploy", "ansible"],   // expected automation
+  "expected_cron": ["/opt/backup/*", "/usr/lib/sysstat/*"],
+  "disabled_rules": ["THN-0003"],
+  "brute_force_threshold": 25
+}
+```
+
+```bash
+tracehound scan /var/log -c tuning.json
+```
+
+### Custom rules
+
+Most rules are not correlations — they are "flag events of this type whose command
+matches this pattern". Requiring Python for those puts rule-writing out of reach of the
+people most likely to have the domain knowledge, so rules can also be declared:
+
+```yaml
+# rules.yaml  (JSON works too, with no extra dependency)
+rules:
+  - id: LOCAL-0001
+    title: Access to deployment secrets
+    severity: high
+    description: Someone read the deployment key material.
+    attack: [T1552.001]
+    match:
+      event_type: [privilege_escalation, command_executed]
+      command: "/etc/deploy/(id_rsa|secrets\\.env)"
+
+  - id: LOCAL-0002
+    title: Repeated sudo failures
+    severity: medium
+    match:
+      event_type: login_failure
+    threshold:
+      count: 5
+      window_seconds: 300
+      group_by: source_ip
+```
+
+```bash
+tracehound scan /var/log -r rules.yaml
+```
+
+`match` narrows which events qualify — every key must hold, and any key other than
+`event_type`, `message`, `user` and `source_ip` is matched as a regex against that
+metadata field. `threshold` turns the rule from "report each match" into "report only
+when enough matches cluster together".
+
+YAML needs `pip install tracehound[yaml]`; JSON needs nothing.
 
 ## Design notes
 
@@ -177,10 +248,23 @@ than invent times, entries are anchored to the file's mtime, tagged
 `timestamp_precision: file_mtime`, and any finding built on them says so in its own text. A
 timeline that quietly implies precision it does not have is a liability in a report.
 
+**Absence is evidence too.** Every rule that reacts to events gets quieter the more thoroughly an
+intruder cleans up. THN-0030 through THN-0032 invert that: a log that falls silent on a busy host,
+a `wtmp` ending mid-record, a missing history for an account that demonstrably ran commands. Because
+absence is weaker evidence than presence, these rules are deliberately conservative — gaps are
+measured against each log's own median cadence rather than a fixed number, and every finding names
+the benign explanations alongside the suspicious one.
+
+**Every byte is accounted for.** Each input file is hashed on ingest and listed in the report with
+its parser and event count, including the ones that were skipped and why. A triage report that
+cannot say exactly which bytes it read is weak evidence.
+
 ## Roadmap
 
-- Parsers: systemd journal export, `/etc/passwd` and `/etc/shadow` diffing, `sudoers`
-- Detections: log tampering, SSH key manipulation, impossible-travel logins
+- Parsers: `/etc/passwd` and `/etc/shadow` diffing, `sudoers`, `authorized_keys`, systemd units
+- A `Fact` model for state-based artifacts, which have no meaningful timestamp
+- Detections: SSH key manipulation, impossible-travel logins
+- Super-timeline export (`l2tcsv`) for Timesketch interoperability
 - Super-timeline export (`l2tcsv`) for Timesketch interoperability
 - Optional YAML rule definitions so detections can be added without writing Python
 

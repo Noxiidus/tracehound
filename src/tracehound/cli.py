@@ -7,10 +7,13 @@ import sys
 from pathlib import Path
 
 from . import __version__, report
+from .config import Config, ConfigError
 from .core import scan
 from .detections import all_detections
+from .detections.base import Detection
 from .models import Severity
 from .parsers import all_parsers
+from .rules import RuleError, load_rules
 
 _SEVERITY_ORDER = [Severity.INFO, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
 
@@ -41,6 +44,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scan_cmd.add_argument("-o", "--output", type=Path, help="write to a file instead of stdout")
     scan_cmd.add_argument(
+        "-c",
+        "--config",
+        type=Path,
+        help="tuning config (JSON, or YAML with the [yaml] extra): allowlisted IPs and "
+        "accounts, expected cron jobs, thresholds, disabled rules",
+    )
+    scan_cmd.add_argument(
+        "-r",
+        "--rules",
+        type=Path,
+        action="append",
+        help="declarative rule file (JSON, or YAML with the [yaml] extra); repeatable",
+    )
+    scan_cmd.add_argument(
         "--min-severity",
         choices=[s.value for s in _SEVERITY_ORDER],
         default="info",
@@ -64,19 +81,35 @@ def _cmd_scan(args: argparse.Namespace) -> int:
             print(f"error: no such file or directory: {path}", file=sys.stderr)
         return 2
 
-    result = scan(args.paths, year=args.year)
+    config = Config()
+    if args.config:
+        try:
+            config = Config.load(args.config)
+        except ConfigError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+    extra: list[Detection] = []
+    for rule_file in args.rules or []:
+        try:
+            extra.extend(load_rules(rule_file))
+        except RuleError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+    result = scan(args.paths, year=args.year, config=config, extra_detections=extra)
 
     threshold = Severity(args.min_severity).rank
     findings = [f for f in result.findings if f.severity.rank >= threshold]
 
     if args.format == "json":
-        output = report.render_json(result.timeline, findings)
+        output = report.render_json(result.timeline, findings, result)
     elif args.format == "csv":
         output = report.render_timeline_csv(result.timeline)
     elif args.format == "html":
-        output = report.render_html(result.timeline, findings)
+        output = report.render_html(result.timeline, findings, result)
     else:
-        output = report.render_text(result.timeline, findings)
+        output = report.render_text(result.timeline, findings, result)
 
     if args.output:
         args.output.write_text(output, encoding="utf-8")

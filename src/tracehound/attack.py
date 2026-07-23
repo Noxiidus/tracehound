@@ -51,6 +51,12 @@ _TECHNIQUES: dict[str, Technique] = {
             "Defense Evasion",
             "TA0005",
         ),
+        Technique(
+            "T1070.003",
+            "Indicator Removal: Clear Command History",
+            "Defense Evasion",
+            "TA0005",
+        ),
         Technique("T1021.004", "Remote Services: SSH", "Lateral Movement", "TA0008"),
     )
 }

@@ -102,7 +102,9 @@ class UtmpParser(Parser):
             size = path.stat().st_size
         except OSError:
             return False
-        if size == 0 or size % RECORD_SIZE != 0:
+        # A trailing partial record is accepted deliberately: truncation is exactly what
+        # log tampering looks like here, and refusing the file would discard the evidence.
+        if size < RECORD_SIZE:
             return False
 
         # A structurally valid record has a known type and a plausible epoch.
@@ -120,11 +122,15 @@ class UtmpParser(Parser):
 
     def parse(self, path: Path, ctx: ParseContext) -> Iterator[Event]:
         is_btmp = path.name.startswith("btmp")
+        source = "btmp" if is_btmp else self.name
+        last_seen: datetime | None = None
 
         with path.open("rb") as fh:
             while True:
                 buf = fh.read(RECORD_SIZE)
                 if len(buf) < RECORD_SIZE:
+                    if buf:
+                        yield self._truncation_event(path, source, len(buf), last_seen)
                     break
 
                 rec_type = struct.unpack_from("<I", buf, _OFF_TYPE)[0]
@@ -147,10 +153,11 @@ class UtmpParser(Parser):
                 session = struct.unpack_from("<I", buf, _OFF_SESSION)[0]
 
                 event_type, message = self._classify(rec_type, user, line, host, is_btmp)
+                last_seen = ts
 
                 yield Event(
                     timestamp=ts,
-                    source="btmp" if is_btmp else self.name,
+                    source=source,
                     event_type=event_type,
                     message=message,
                     user=user or None,
@@ -165,6 +172,36 @@ class UtmpParser(Parser):
                         "host": host,
                     },
                 )
+
+    def _truncation_event(
+        self, path: Path, source: str, trailing: int, last_seen: datetime | None
+    ) -> Event:
+        """Flag a file that ends mid-record.
+
+        These databases are only ever appended to in whole ``RECORD_SIZE`` units, so a
+        partial tail means something rewrote the file rather than the system writing it.
+        The event is anchored to the last intact record because that is the latest moment
+        the file is known to have been consistent.
+        """
+        if last_seen is None:
+            try:
+                last_seen = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            except OSError:
+                last_seen = datetime.now(timezone.utc)
+
+        return Event(
+            timestamp=last_seen,
+            source=source,
+            event_type=EventType.OTHER,
+            message=f"{path.name} ends mid-record ({trailing} trailing bytes)",
+            raw=f"truncated: {trailing} bytes short of a {RECORD_SIZE}-byte record",
+            metadata={
+                "anomaly": "truncated",
+                "trailing_bytes": trailing,
+                "record_size": RECORD_SIZE,
+                "file": path.name,
+            },
+        )
 
     def _classify(
         self, rec_type: int, user: str, line: str, host: str, is_btmp: bool

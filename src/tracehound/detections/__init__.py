@@ -21,18 +21,26 @@ from .persistence import (
     PrivilegedGroupDetection,
     SensitiveSudoDetection,
 )
+from .tampering import (
+    ClearedHistoryDetection,
+    LogGapDetection,
+    TruncatedRecordDetection,
+)
 
 __all__ = [
     "AccountCreationDetection",
     "BackdoorAccountDetection",
     "BruteForceDetection",
+    "ClearedHistoryDetection",
     "CronPersistenceDetection",
     "Detection",
+    "LogGapDetection",
     "PasswordSprayDetection",
     "PrivilegedGroupDetection",
     "SensitiveSudoDetection",
     "SuccessfulBruteForceDetection",
     "SuspiciousShellCommandDetection",
+    "TruncatedRecordDetection",
     "all_detections",
     "register",
     "run_all",

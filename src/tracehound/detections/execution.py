@@ -6,6 +6,7 @@ import re
 from collections.abc import Iterator
 from typing import ClassVar
 
+from ..config import Config
 from ..models import EventType, Finding, Severity
 from ..timeline import Timeline
 from .base import Detection, register
@@ -29,10 +30,10 @@ class SuspiciousShellCommandDetection(Detection):
     description: ClassVar[str] = "A recorded shell command matched a known abuse pattern."
     attack_techniques: ClassVar[list[str]] = ["T1059.004"]
 
-    def run(self, timeline: Timeline) -> Iterator[Finding]:
+    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
         for event in timeline.of_type(EventType.COMMAND_EXECUTED):
             command = str(event.metadata.get("command", event.message))
-            if not command:
+            if not command or config.account_allowed(event.user):
                 continue
 
             for pattern, reason, techniques in SENSITIVE_COMMANDS:
@@ -74,10 +75,10 @@ class CronPersistenceDetection(Detection):
     )
     attack_techniques: ClassVar[list[str]] = ["T1053.003"]
 
-    def run(self, timeline: Timeline) -> Iterator[Finding]:
+    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
         for event in timeline.of_type(EventType.CRON_JOB):
             command = str(event.metadata.get("command", ""))
-            if not command:
+            if not command or config.cron_allowed(command):
                 continue
 
             for pattern, reason in SUSPICIOUS_CRON_PATTERNS:

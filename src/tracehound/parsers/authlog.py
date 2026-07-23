@@ -98,6 +98,25 @@ def _clean_user(value: str | None) -> str | None:
     return value.rstrip(":,").strip() or None
 
 
+def classify_message(message: str) -> tuple[EventType, str | None, str | None, dict[str, object]]:
+    """Map a syslog message body to ``(event_type, user, source_ip, metadata)``.
+
+    Exposed separately from the parser because the journal carries the *same* message
+    wording inside a different envelope — only the transport differs, so the vocabulary
+    should be defined once and shared rather than duplicated and allowed to drift.
+    """
+    for pattern, candidate_type in _MESSAGE_RULES:
+        found = pattern.match(message)
+        if found is None:
+            continue
+        groups = found.groupdict()
+        metadata: dict[str, object] = {
+            k: v for k, v in groups.items() if v and k not in {"user", "ip"}
+        }
+        return candidate_type, _clean_user(groups.get("user")), groups.get("ip"), metadata
+    return EventType.OTHER, None, None, {}
+
+
 @register
 class AuthLogParser(Parser):
     name = "auth.log"
@@ -183,21 +202,7 @@ class AuthLogParser(Parser):
         process = match.group("proc")
         pid_text = match.group("pid")
 
-        event_type = EventType.OTHER
-        metadata: dict[str, object] = {}
-        user: str | None = None
-        source_ip: str | None = None
-
-        for pattern, candidate_type in _MESSAGE_RULES:
-            found = pattern.match(message)
-            if found is None:
-                continue
-            event_type = candidate_type
-            groups = found.groupdict()
-            user = _clean_user(groups.get("user"))
-            source_ip = groups.get("ip")
-            metadata = {k: v for k, v in groups.items() if v and k not in {"user", "ip"}}
-            break
+        event_type, user, source_ip, metadata = classify_message(message)
 
         if process == "CRON" and event_type in {EventType.SESSION_OPEN, EventType.SESSION_CLOSE}:
             event_type = EventType.CRON_JOB
