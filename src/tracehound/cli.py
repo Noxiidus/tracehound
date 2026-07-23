@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 from . import __version__, report
+from .case import build_case
 from .config import Config, ConfigError
 from .core import scan
 from .detections import all_detections
@@ -69,9 +71,100 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit 1 if any finding survives filtering (useful in CI)",
     )
 
+    case_cmd = sub.add_parser(
+        "case",
+        help="correlate several hosts as one investigation",
+        description="Scan multiple hosts and report findings that only appear when their "
+        "evidence is considered together: shared attacker infrastructure, accounts reused "
+        "across machines, and which host was reached first.",
+    )
+    case_cmd.add_argument(
+        "--host",
+        action="append",
+        required=True,
+        metavar="NAME=PATH",
+        help="a host's evidence directory or file; repeat for each host",
+    )
+    case_cmd.add_argument(
+        "--clock-offset",
+        action="append",
+        default=[],
+        metavar="NAME=SECONDS",
+        help="measured clock correction for a host, in seconds (positive if its clock "
+        "ran slow). Hosts without one are treated as unverified and cross-host ordering "
+        "is hedged accordingly",
+    )
+    case_cmd.add_argument("--year", type=int, help="year to assume for syslog timestamps")
+    case_cmd.add_argument("-c", "--config", type=Path, help="tuning config")
+    case_cmd.add_argument(
+        "-f", "--format", choices=["text", "json"], default="text", help="output format"
+    )
+    case_cmd.add_argument("-o", "--output", type=Path, help="write to a file instead of stdout")
+
     sub.add_parser("parsers", help="list available artifact parsers")
     sub.add_parser("rules", help="list available detection rules")
     return parser
+
+
+def _parse_pairs(values: list[str], what: str) -> dict[str, str] | None:
+    pairs: dict[str, str] = {}
+    for item in values:
+        name, sep, value = item.partition("=")
+        if not sep or not name.strip() or not value.strip():
+            print(f"error: --{what} expects NAME=VALUE, got {item!r}", file=sys.stderr)
+            return None
+        pairs[name.strip()] = value.strip()
+    return pairs
+
+
+def _cmd_case(args: argparse.Namespace) -> int:
+    hosts = _parse_pairs(args.host, "host")
+    if hosts is None:
+        return 2
+
+    sources: dict[str, list[Path]] = {}
+    for name, raw_path in hosts.items():
+        path = Path(raw_path)
+        if not path.exists():
+            print(f"error: no such file or directory: {path}", file=sys.stderr)
+            return 2
+        sources.setdefault(name, []).append(path)
+
+    raw_offsets = _parse_pairs(args.clock_offset, "clock-offset")
+    if raw_offsets is None:
+        return 2
+
+    offsets: dict[str, timedelta] = {}
+    for name, seconds in raw_offsets.items():
+        if name not in sources:
+            print(f"error: --clock-offset names unknown host {name!r}", file=sys.stderr)
+            return 2
+        try:
+            offsets[name] = timedelta(seconds=float(seconds))
+        except ValueError:
+            print(f"error: clock offset for {name!r} must be a number", file=sys.stderr)
+            return 2
+
+    config = Config()
+    if args.config:
+        try:
+            config = Config.load(args.config)
+        except ConfigError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+    case = build_case(sources, year=args.year, config=config, offsets=offsets)
+
+    output = (
+        report.render_case_json(case) if args.format == "json" else report.render_case_text(case)
+    )
+
+    if args.output:
+        args.output.write_text(output, encoding="utf-8")
+        print(f"wrote {args.output}", file=sys.stderr)
+    else:
+        print(output)
+    return 0
 
 
 def _cmd_scan(args: argparse.Namespace) -> int:
@@ -142,6 +235,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "scan":
         return _cmd_scan(args)
+    if args.command == "case":
+        return _cmd_case(args)
     if args.command == "parsers":
         return _cmd_parsers()
     if args.command == "rules":

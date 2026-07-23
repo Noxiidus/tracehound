@@ -5,6 +5,7 @@
 [![CI](https://github.com/Noxiidus/tracehound/actions/workflows/ci.yml/badge.svg)](https://github.com/Noxiidus/tracehound/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-orange)](CHANGELOG.md)
 
 Point it at `/var/log`, a mounted image, or a folder of collected evidence. It parses what it
 recognises, merges everything into one UTC-normalised timeline, and applies detection rules that
@@ -258,6 +259,46 @@ the benign explanations alongside the suspicious one.
 **Every byte is accounted for.** Each input file is hashed on ingest and listed in the report with
 its parser and event count, including the ones that were skipped and why. A triage report that
 cannot say exactly which bytes it read is weak evidence.
+
+## Multi-host investigations
+
+One machine is rarely the whole story. `tracehound case` scans several hosts and reports
+what only appears when their evidence is considered together:
+
+```bash
+tracehound case \
+  --host web01=/evidence/web01 \
+  --host db01=/evidence/db01 \
+  --host app02=/evidence/app02 \
+  --year 2024
+```
+
+| ID | Severity | Detects |
+|---|---|---|
+| THN-1001 | High | One source address active against multiple hosts, with order of first contact |
+| THN-1002 | Critical | An account created on one host that later authenticated on another |
+| THN-1003 | Medium | The host an attacker reached first — the likely entry point |
+| THN-1004 | Medium | Ordering that cannot be established because clocks are unverified |
+
+### The clock problem
+
+Drift is harmless within one host, because every event shifts together. **Across hosts
+the same drift can invert cause and effect** — making it look as though the second
+machine compromised the first.
+
+tracehound never *infers* an offset. Where two hosts both show one attacker, the apparent
+timing difference is genuinely ambiguous: it may be drift, or the attacker may simply
+have reached one host before the other. Nothing in the artifacts distinguishes those. So
+offsets are applied only when you supply them:
+
+```bash
+tracehound case --host web01=/ev/web01 --host db01=/ev/db01 \
+  --clock-offset web01=0 --clock-offset db01=-137
+```
+
+Without one, a host is marked `assumed`, and any ordering claim inside five minutes is
+hedged rather than asserted — THN-1003 downgrades itself to a *candidate*, and THN-1004
+explains why. Supply measured offsets and the same findings become conclusions.
 
 ## Roadmap
 

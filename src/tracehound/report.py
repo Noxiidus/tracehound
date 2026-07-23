@@ -14,6 +14,7 @@ from .models import Finding, Severity
 from .timeline import Timeline
 
 if TYPE_CHECKING:
+    from .case import Case
     from .core import ScanResult
 
 _SEVERITY_COLOUR = {
@@ -105,6 +106,92 @@ def render_json(
     }
     if result is not None:
         payload["provenance"] = result.provenance()
+    return json.dumps(payload, indent=2)
+
+
+def render_case_text(case: Case) -> str:
+    """Render a multi-host investigation."""
+    out = io.StringIO()
+    out.write("tracehound case report\n")
+    out.write("=" * 70 + "\n\n")
+
+    merged = case.merged_timeline()
+    out.write(f"Hosts         : {len(case.hosts)}\n")
+    out.write(f"Events (all)  : {len(merged)}\n")
+    out.write(f"Time range    : {_fmt(merged.start)} .. {_fmt(merged.end)} UTC\n")
+    out.write(f"Cross-host    : {len(case.findings)} finding(s)\n")
+    out.write(
+        "Clocks        : "
+        + ("all verified\n" if case.all_clocks_verified else "NOT all verified\n")
+    )
+
+    out.write("\nHosts\n")
+    out.write("-" * 70 + "\n")
+    for host in case.hosts:
+        offset = int(host.clock_offset.total_seconds())
+        out.write(
+            f"  {host.name:20} {len(host.result.timeline):5} events  "
+            f"{len(host.result.findings):3} findings  "
+            f"clock {offset:+d}s ({host.clock_confidence})\n"
+        )
+
+    if not case.findings:
+        out.write("\nNo cross-host findings. Single-host findings are reported per host.\n")
+    else:
+        out.write("\nCross-host findings\n")
+        for index, finding in enumerate(case.findings, start=1):
+            out.write("-" * 70 + "\n")
+            out.write(f"[{index}] {finding.severity.value.upper()}  {finding.title}\n")
+            out.write(f"    rule    : {finding.rule_id}\n")
+            out.write(
+                f"    window  : {_fmt(finding.first_seen)} .. {_fmt(finding.last_seen)} UTC\n"
+            )
+            if finding.attack_techniques:
+                out.write("    ATT&CK  : \n")
+                for technique in finding.attack_techniques:
+                    out.write(f"              {attack.describe(technique)}\n")
+            out.write("\n")
+            for line in finding.description.splitlines():
+                out.write(f"    {line}\n")
+            out.write("\n")
+
+    out.write("\nPer-host findings\n")
+    out.write("=" * 70 + "\n")
+    for host in case.hosts:
+        out.write(f"\n### {host.name}\n\n")
+        if not host.result.findings:
+            out.write("  (none)\n")
+            continue
+        for finding in host.result.findings:
+            out.write(
+                f"  [{finding.severity.value.upper():8}] {finding.rule_id}  {finding.title}\n"
+            )
+
+    return out.getvalue()
+
+
+def render_case_json(case: Case) -> str:
+    merged = case.merged_timeline()
+    payload = {
+        "tool": "tracehound",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "host_count": len(case.hosts),
+            "event_count": len(merged),
+            "start": merged.start.isoformat() if merged.start else None,
+            "end": merged.end.isoformat() if merged.end else None,
+            "cross_host_finding_count": len(case.findings),
+            "all_clocks_verified": case.all_clocks_verified,
+        },
+        "cross_host_findings": [f.to_dict() for f in case.findings],
+        "hosts": [
+            {
+                **host.to_dict(),
+                "findings": [f.to_dict(include_events=False) for f in host.result.findings],
+            }
+            for host in case.hosts
+        ],
+    }
     return json.dumps(payload, indent=2)
 
 

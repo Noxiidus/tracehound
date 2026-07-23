@@ -58,6 +58,13 @@ _TECHNIQUES: dict[str, Technique] = {
             "TA0005",
         ),
         Technique("T1021.004", "Remote Services: SSH", "Lateral Movement", "TA0008"),
+        Technique("T1595", "Active Scanning", "Reconnaissance", "TA0043"),
+        Technique(
+            "T1552.001",
+            "Unsecured Credentials: Credentials In Files",
+            "Credential Access",
+            "TA0006",
+        ),
     )
 }
 
