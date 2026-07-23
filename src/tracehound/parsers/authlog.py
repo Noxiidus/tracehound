@@ -10,6 +10,7 @@ import re
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import ClassVar
 
 from ..models import Event, EventType
 from .base import ParseContext, Parser, register
@@ -101,6 +102,7 @@ def _clean_user(value: str | None) -> str | None:
 class AuthLogParser(Parser):
     name = "auth.log"
     description = "Linux authentication log (auth.log / secure)"
+    priority: ClassVar[int] = 90  # catch-all for syslog; specific formats must go first
 
     def sniff(self, path: Path) -> bool:
         if path.suffix in {".pcap", ".pcapng"}:

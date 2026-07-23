@@ -28,6 +28,7 @@ import struct
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import ClassVar
 
 from ..models import Event, EventType
 from .base import ParseContext, Parser, register
@@ -94,6 +95,7 @@ def _addr(buf: bytes) -> str | None:
 class UtmpParser(Parser):
     name = "wtmp"
     description = "Binary login records (wtmp / utmp / btmp)"
+    priority: ClassVar[int] = 10  # binary, unambiguous — check before any text parser
 
     def sniff(self, path: Path) -> bool:
         try:

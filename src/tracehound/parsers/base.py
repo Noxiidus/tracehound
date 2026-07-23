@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 from ..models import Event
 
@@ -31,8 +32,14 @@ class Parser(ABC):
     detection's job, not a parser's.
     """
 
-    name: str
-    description: str
+    name: ClassVar[str]
+    description: ClassVar[str]
+
+    #: Lower runs first during sniffing. Specific formats must outrank general ones —
+    #: a cron log is also valid syslog, so it has to be offered the file before the
+    #: catch-all auth.log parser claims it. Ordering must not depend on import order,
+    #: which formatters are free to rearrange.
+    priority: ClassVar[int] = 50
 
     @abstractmethod
     def sniff(self, path: Path) -> bool:
@@ -53,12 +60,12 @@ def register(cls: type[Parser]) -> type[Parser]:
 
 
 def all_parsers() -> list[Parser]:
-    return list(_REGISTRY)
+    return sorted(_REGISTRY, key=lambda p: (p.priority, p.name))
 
 
 def parser_for(path: Path) -> Parser | None:
-    """Return the first registered parser that recognises ``path``."""
-    for parser in _REGISTRY:
+    """Return the highest-priority registered parser that recognises ``path``."""
+    for parser in all_parsers():
         try:
             if parser.sniff(path):
                 return parser

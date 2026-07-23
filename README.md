@@ -107,8 +107,15 @@ for event in result.timeline.by_ip("65.2.161.68"):
 
 | Parser | Files | Notes |
 |---|---|---|
-| `auth.log` | `auth.log`, `secure` | sshd, sudo, PAM, useradd/usermod/groupadd, systemd-logind. Both syslog and ISO-8601 timestamps. |
 | `wtmp` | `wtmp`, `utmp`, `btmp` | Binary 384-byte records parsed directly. `btmp` entries are classified as failures. |
+| `lastlog` | `lastlog` | 292-byte array indexed by UID. Sparse zero records mean "never logged in" and are skipped. |
+| `shell_history` | `.bash_history`, `.zsh_history` | Handles `HISTTIMEFORMAT` epochs; undated entries are flagged, never silently dated. |
+| `cron` | `cron`, `cron.log` | `CROND` execution records, with the scheduled command extracted. |
+| `auth.log` | `auth.log`, `secure` | sshd, sudo, PAM, useradd/usermod/groupadd, systemd-logind. Both syslog and ISO-8601 timestamps. |
+
+Parser selection is driven by an explicit `priority`, not import order. A cron log is
+also valid syslog, so it must be offered the file before the catch-all `auth.log` parser
+claims it — and that ordering cannot be left to a formatter's whim.
 
 ## Detection rules
 
@@ -121,6 +128,8 @@ for event in result.timeline.by_ip("65.2.161.68"):
 | THN-0011 | High | Account added to a privileged group | T1098, T1548.003 |
 | THN-0012 | Critical | Backdoor account — created *and* privileged shortly after | T1136.001, T1098 |
 | THN-0013 | High | Sensitive sudo command (shadow access, downloads, log destruction, …) | T1548.003 + per-pattern |
+| THN-0020 | Medium | Suspicious command recorded in shell history | T1059.004 + per-pattern |
+| THN-0021 | High | Scheduled task running from a world-writable path, piping downloads to a shell, … | T1053.003 |
 
 ## Design notes
 
@@ -155,10 +164,15 @@ The test suite generates its own artifacts — see `tests/synth.py`, which write
 `wtmp` records so parser round-trips actually prove the struct layout. **No real evidence is
 committed to this repository**, and none should be.
 
+**Undated evidence stays undated.** Bare `.bash_history` files carry no timestamps at all. Rather
+than invent times, entries are anchored to the file's mtime, tagged
+`timestamp_precision: file_mtime`, and any finding built on them says so in its own text. A
+timeline that quietly implies precision it does not have is a liability in a report.
+
 ## Roadmap
 
-- Parsers: `lastlog`, `btmp` standalone, cron logs, `bash_history`, systemd journal export
-- Detections: log tampering, cron persistence, SSH key manipulation, impossible-travel logins
+- Parsers: systemd journal export, `/etc/passwd` and `/etc/shadow` diffing, `sudoers`
+- Detections: log tampering, SSH key manipulation, impossible-travel logins
 - Super-timeline export (`l2tcsv`) for Timesketch interoperability
 - Optional YAML rule definitions so detections can be added without writing Python
 

@@ -11,6 +11,10 @@ from .bruteforce import (
     PasswordSprayDetection,
     SuccessfulBruteForceDetection,
 )
+from .execution import (
+    CronPersistenceDetection,
+    SuspiciousShellCommandDetection,
+)
 from .persistence import (
     AccountCreationDetection,
     BackdoorAccountDetection,
@@ -22,11 +26,13 @@ __all__ = [
     "AccountCreationDetection",
     "BackdoorAccountDetection",
     "BruteForceDetection",
+    "CronPersistenceDetection",
     "Detection",
     "PasswordSprayDetection",
     "PrivilegedGroupDetection",
     "SensitiveSudoDetection",
     "SuccessfulBruteForceDetection",
+    "SuspiciousShellCommandDetection",
     "all_detections",
     "register",
     "run_all",
