@@ -30,6 +30,13 @@ def _fmt(dt: datetime | None) -> str:
     return dt.strftime("%Y-%m-%d %H:%M:%S") if dt else "—"
 
 
+def _html_facts_row(result: ScanResult | None) -> str:
+    if result is None or not result.factbase.facts:
+        return ""
+    fb = result.factbase
+    return f"<dt>State facts</dt><dd>{len(fb)} across {len(fb.subjects())} subjects</dd>"
+
+
 def render_text(
     timeline: Timeline,
     findings: list[Finding],
@@ -43,6 +50,11 @@ def render_text(
     out.write(f"Time range    : {_fmt(timeline.start)} .. {_fmt(timeline.end)} UTC\n")
     sources = ", ".join(f"{name} ({count})" for name, count in sorted(timeline.sources().items()))
     out.write(f"Sources       : {sources or '—'}\n")
+    if result is not None and result.factbase.facts:
+        fb = result.factbase
+        state_sources = ", ".join(f"{n} ({c})" for n, c in sorted(fb.sources().items()))
+        out.write(f"State facts   : {len(fb)} across {len(fb.subjects())} subjects\n")
+        out.write(f"State sources : {state_sources}\n")
     out.write(f"Findings      : {len(findings)}\n")
 
     if result is not None:
@@ -52,10 +64,14 @@ def render_text(
         out.write("-" * 70 + "\n")
         for record in result.artifacts:
             status = record.parser if record.parsed else f"SKIPPED — {record.skipped_reason}"
+            yielded = (
+                f"{record.fact_count} facts"
+                if record.fact_count
+                else f"{record.event_count} events"
+            )
             out.write(f"  {record.path}\n")
             out.write(
-                f"      sha256={record.sha256 or '—'}  {record.size} bytes  "
-                f"[{status}, {record.event_count} events]\n"
+                f"      sha256={record.sha256 or '—'}  {record.size} bytes  [{status}, {yielded}]\n"
             )
     out.write("\n")
 
@@ -75,11 +91,18 @@ def render_text(
         out.write("\n")
         for line in finding.description.splitlines():
             out.write(f"    {line}\n")
-        out.write(f"\n    Supporting events ({len(finding.events)}):\n")
-        for event in finding.events[:5]:
-            out.write(f"      {_fmt(event.timestamp)}  {event.message[:80]}\n")
-        if len(finding.events) > 5:
-            out.write(f"      ... and {len(finding.events) - 5} more\n")
+        if finding.facts:
+            out.write(f"\n    Supporting facts ({len(finding.facts)}):\n")
+            for fact in finding.facts[:6]:
+                out.write(f"      {fact.subject}  {fact.attribute}={fact.value[:70]}\n")
+            if len(finding.facts) > 6:
+                out.write(f"      ... and {len(finding.facts) - 6} more\n")
+        else:
+            out.write(f"\n    Supporting events ({len(finding.events)}):\n")
+            for event in finding.events[:5]:
+                out.write(f"      {_fmt(event.timestamp)}  {event.message[:80]}\n")
+            if len(finding.events) > 5:
+                out.write(f"      ... and {len(finding.events) - 5} more\n")
         out.write("\n")
 
     return out.getvalue()
@@ -92,16 +115,21 @@ def render_json(
     *,
     include_events: bool = True,
 ) -> str:
+    summary: dict[str, object] = {
+        "event_count": len(timeline),
+        "start": timeline.start.isoformat() if timeline.start else None,
+        "end": timeline.end.isoformat() if timeline.end else None,
+        "sources": timeline.sources(),
+        "finding_count": len(findings),
+    }
+    if result is not None and result.factbase.facts:
+        summary["fact_count"] = len(result.factbase)
+        summary["fact_subjects"] = len(result.factbase.subjects())
+        summary["fact_sources"] = result.factbase.sources()
     payload: dict[str, object] = {
         "tool": "tracehound",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "summary": {
-            "event_count": len(timeline),
-            "start": timeline.start.isoformat() if timeline.start else None,
-            "end": timeline.end.isoformat() if timeline.end else None,
-            "sources": timeline.sources(),
-            "finding_count": len(findings),
-        },
+        "summary": summary,
         "findings": [f.to_dict(include_events=include_events) for f in findings],
     }
     if result is not None:
@@ -230,11 +258,28 @@ def render_html(
             else f"<li>{html.escape(t)}</li>"
             for t in finding.attack_techniques
         )
-        events = "".join(
-            f"<tr><td>{_fmt(e.timestamp)}</td><td>{html.escape(e.source)}</td>"
-            f"<td>{html.escape(e.message[:120])}</td></tr>"
-            for e in finding.events[:10]
-        )
+        if finding.facts:
+            evidence_meta = f"{len(finding.facts)} fact(s)"
+            body_rows = "".join(
+                f"<tr><td>{html.escape(f.subject)}</td><td>{html.escape(f.attribute)}</td>"
+                f"<td>{html.escape(f.value[:120])}</td></tr>"
+                for f in finding.facts[:12]
+            )
+            table = (
+                "<table><thead><tr><th>Subject</th><th>Attribute</th><th>Value</th></tr>"
+                f"</thead><tbody>{body_rows}</tbody></table>"
+            )
+        else:
+            evidence_meta = f"{len(finding.events)} event(s)"
+            body_rows = "".join(
+                f"<tr><td>{_fmt(e.timestamp)}</td><td>{html.escape(e.source)}</td>"
+                f"<td>{html.escape(e.message[:120])}</td></tr>"
+                for e in finding.events[:10]
+            )
+            table = (
+                "<table><thead><tr><th>Time (UTC)</th><th>Source</th><th>Event</th></tr>"
+                f"</thead><tbody>{body_rows}</tbody></table>"
+            )
         rows.append(f"""
         <article class="finding">
           <header style="border-left-color:{_SEVERITY_COLOUR[finding.severity]}">
@@ -243,12 +288,11 @@ def render_html(
             <h2>{html.escape(finding.title)}</h2>
             <p class="meta">{finding.rule_id} &middot;
                {_fmt(finding.first_seen)} .. {_fmt(finding.last_seen)} UTC &middot;
-               {len(finding.events)} event(s)</p>
+               {evidence_meta}</p>
           </header>
           <p class="desc">{html.escape(finding.description)}</p>
           {f"<ul class='attack'>{techniques}</ul>" if techniques else ""}
-          <table><thead><tr><th>Time (UTC)</th><th>Source</th><th>Event</th></tr></thead>
-          <tbody>{events}</tbody></table>
+          {table}
         </article>""")
 
     sources = ", ".join(f"{n} ({c})" for n, c in sorted(timeline.sources().items()))
@@ -261,14 +305,14 @@ def render_html(
             f"<td class='mono'>{html.escape(r.sha256[:16] or '—')}…</td>"
             f"<td>{r.size}</td>"
             f"<td>{html.escape(r.parser or 'skipped: ' + (r.skipped_reason or ''))}</td>"
-            f"<td>{r.event_count}</td></tr>"
+            f"<td>{r.fact_count or r.event_count}</td></tr>"
             for r in result.artifacts
         )
         evidence = f"""
         <details class="evidence"><summary>Evidence examined
           ({len(result.parsed)} parsed, {len(result.skipped)} skipped)</summary>
           <table><thead><tr><th>File</th><th>SHA-256</th><th>Bytes</th>
-          <th>Parser</th><th>Events</th></tr></thead><tbody>{entries}</tbody></table>
+          <th>Parser</th><th>Records</th></tr></thead><tbody>{entries}</tbody></table>
           <p class="meta">tracehound {html.escape(result.tool_version)} &middot; scanned
           {_fmt(result.started_at)} UTC</p>
         </details>"""
@@ -313,6 +357,7 @@ def render_html(
   <dt>Events</dt><dd>{len(timeline)}</dd>
   <dt>Range</dt><dd>{_fmt(timeline.start)} .. {_fmt(timeline.end)} UTC</dd>
   <dt>Sources</dt><dd>{html.escape(sources) or "&mdash;"}</dd>
+  {_html_facts_row(result)}
   <dt>Findings</dt><dd>{len(findings)}</dd>
 </dl></div>
 {evidence}

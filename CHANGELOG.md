@@ -7,6 +7,48 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.6.0] — 2026-07-25
+
+State artifacts. Everything tracehound read until now was an *event* — something that
+happened at a moment in time. But the most durable evidence an intruder leaves is *state*:
+a second UID-0 account, a passwordless sudoers grant, an SSH key nobody recognises, a
+service unit pointing at `/tmp`. None of these have a meaningful timestamp, so none of them
+fit `Event` — and forcing them in would mean inventing a time, which this project refuses
+to do everywhere else.
+
+### Added
+
+- **`Fact` model** — an entity-attribute-value triple (`subject`, `attribute`, `value`,
+  `source`, `metadata`) for state artifacts, alongside the existing `Event`. Subjects are
+  namespaced by kind (`account:root`, `sudo:%wheel`, `unit:evil.service`) so unrelated
+  artifacts never collide. It carries no timestamp on purpose.
+- **`FactBase`** — the state counterpart to `Timeline`: unordered, indexed for the flat
+  questions detections ask (`with_attribute("uid")`, `value(subject, "shell")`).
+- **`FactParser` / `FactDetection`** interfaces with their own registries, mirroring the
+  event side. A rule id disables a fact rule exactly as it disables an event rule.
+- **Five state parsers**: `/etc/passwd`, `/etc/group`, `/etc/sudoers` (and `sudoers.d`),
+  SSH `authorized_keys`, and systemd unit files. These were already gathered by the
+  collector and, until now, ignored.
+- **Five state detections**:
+  - **THN-0040** — multiple, or non-root, accounts with UID 0.
+  - **THN-0041** — passwordless or wildcard sudoers grants to a non-standard principal.
+  - **THN-0042** — authorised SSH key using a deprecated algorithm or forcing an
+    interpreter via a `command=` option.
+  - **THN-0043** — systemd unit executing from a world-writable path (`/tmp`, `/var/tmp`,
+    `/dev/shm`).
+  - **THN-0044** — system account (UID below 1000) with an interactive login shell.
+- Reports (text, JSON, HTML) now surface the fact base and render fact-only findings with
+  their supporting facts; `tracehound parsers` and `tracehound rules` list the state
+  parsers and rules too.
+
+### Notes
+
+This was scheduled deliberately at six parsers rather than later: it is a model change,
+and model changes get more expensive with every parser added. Each state detection names
+the innocent explanation alongside the suspicious one — an alternate root, a deployment
+account, a legacy key can all be legitimate — and every one is suppressible through the
+existing `service_accounts` and `disabled_rules` config, so a tuned scan stays quiet.
+
 ## [0.5.0] — 2026-07-23
 
 Collection. tracehound could analyse evidence but nothing gathered it, which left two

@@ -15,12 +15,13 @@ Typical use::
 
 from __future__ import annotations
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 from .case import Case, Host, build_case
 from .config import Config
 from .core import ScanResult, scan
-from .models import Event, EventType, Finding, Severity
+from .factbase import FactBase
+from .models import Event, EventType, Fact, Finding, Severity
 from .timeline import Timeline
 
 __all__ = [
@@ -28,6 +29,8 @@ __all__ = [
     "Config",
     "Event",
     "EventType",
+    "Fact",
+    "FactBase",
     "Finding",
     "Host",
     "ScanResult",

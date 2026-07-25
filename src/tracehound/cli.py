@@ -11,11 +11,11 @@ from . import __version__, report
 from .case import build_case
 from .config import Config, ConfigError
 from .core import scan
-from .detections import all_detections
+from .detections import all_detections, all_fact_detections
 from .detections.base import Detection
 from .manifest import Manifest, ManifestError
 from .models import Severity
-from .parsers import all_parsers
+from .parsers import all_fact_parsers, all_parsers
 from .rules import RuleError, load_rules
 
 _SEVERITY_ORDER = [Severity.INFO, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
@@ -301,16 +301,27 @@ def _cmd_scan(args: argparse.Namespace) -> int:
 
 
 def _cmd_parsers() -> int:
+    print("Event parsers (build the timeline):")
     for parser in all_parsers():
-        print(f"{parser.name:12} {parser.description}")
+        print(f"  {parser.name:16} {parser.description}")
+    print("\nState parsers (build the fact base):")
+    for fact_parser in all_fact_parsers():
+        print(f"  {fact_parser.name:16} {fact_parser.description}")
     return 0
 
 
 def _cmd_rules() -> int:
-    for detection in all_detections():
-        techniques = ", ".join(detection.attack_techniques) or "—"
-        print(f"{detection.rule_id}  {detection.severity.value:8}  {detection.title}")
-        print(f"{'':10}{detection.description}")
+    rules = [
+        (d.rule_id, d.severity.value, d.title, d.description, d.attack_techniques)
+        for d in all_detections()
+    ] + [
+        (d.rule_id, d.severity.value, d.title, d.description, d.attack_techniques)
+        for d in all_fact_detections()
+    ]
+    for rule_id, severity, title, description, attack_techniques in sorted(rules):
+        techniques = ", ".join(attack_techniques) or "—"
+        print(f"{rule_id}  {severity:8}  {title}")
+        print(f"{'':10}{description}")
         print(f"{'':10}ATT&CK: {techniques}\n")
     return 0
 

@@ -1,8 +1,14 @@
 """Core data model.
 
-Everything the parsers emit is an :class:`Event`; everything the detections emit is a
-:class:`Finding`. Keeping both deliberately flat makes them trivial to serialise and to
-reason about in a report.
+Everything the timeline parsers emit is an :class:`Event`; the state parsers emit a
+:class:`Fact`; everything the detections emit is a :class:`Finding`. Keeping all three
+deliberately flat makes them trivial to serialise and to reason about in a report.
+
+An :class:`Event` is something that *happened* at a moment in time. A :class:`Fact` is
+something that *is* — the current contents of a state artifact such as ``/etc/passwd`` or
+a systemd unit. Facts have no meaningful timestamp, so they deliberately do not carry one:
+inventing a time the evidence does not support is exactly the mistake this project refuses
+to make everywhere else.
 """
 
 from __future__ import annotations
@@ -110,14 +116,60 @@ class Event:
 
 
 @dataclass(slots=True)
+class Fact:
+    """A single attribute of some state artifact, recovered as it stands right now.
+
+    Modelled as an entity-attribute-value triple so a detection can ask a flat question
+    ("which subjects have ``uid`` equal to ``0``") without parsing structure a second time.
+    ``subject`` is namespaced by kind — ``account:root``, ``group:sudo``, ``sudo:%wheel``,
+    ``sshkey:...``, ``unit:evil.service`` — so unrelated artifacts never collide.
+
+    There is deliberately no timestamp. A fact describes what is true in the snapshot that
+    was collected; when it *became* true is a different question the artifact rarely
+    answers, and this project does not guess at times.
+    """
+
+    subject: str
+    attribute: str
+    value: str
+    source: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def kind(self) -> str:
+        """The namespace of ``subject`` — ``account`` for ``account:root``."""
+        return self.subject.split(":", 1)[0]
+
+    @property
+    def name(self) -> str:
+        """The bare identifier of ``subject`` — ``root`` for ``account:root``."""
+        return self.subject.split(":", 1)[1] if ":" in self.subject else self.subject
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "subject": self.subject,
+            "attribute": self.attribute,
+            "value": self.value,
+            "source": self.source,
+            "metadata": self.metadata,
+        }
+
+
+@dataclass(slots=True)
 class Finding:
-    """A conclusion drawn from one or more events by a detection rule."""
+    """A conclusion drawn from one or more events *or facts* by a detection rule.
+
+    Event-based rules populate ``events``; state-based rules populate ``facts``. A finding
+    may carry either, and its time window is derived only from the events it holds — a
+    fact-only finding has no window, and says so rather than inventing one.
+    """
 
     rule_id: str
     title: str
     severity: Severity
     description: str
     events: list[Event] = field(default_factory=list)
+    facts: list[Fact] = field(default_factory=list)
     attack_techniques: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -140,8 +192,10 @@ class Finding:
             "first_seen": first.isoformat() if first else None,
             "last_seen": last.isoformat() if last else None,
             "event_count": len(self.events),
+            "fact_count": len(self.facts),
             "metadata": self.metadata,
         }
         if include_events:
             out["events"] = [e.to_dict() for e in self.events]
+            out["facts"] = [f.to_dict() for f in self.facts]
         return out

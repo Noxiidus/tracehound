@@ -9,42 +9,18 @@ rest.
 
 ---
 
-## 0.6.0 — State artifacts and the `Fact` model
+## 0.6.0 — State artifacts and the `Fact` model — **shipped**
 
-**The problem.** Everything tracehound reads today is an *event*: something that happened
-at a moment in time. But some of the most important evidence on a Linux host is *state* —
-what a file contains right now:
+Delivered in [0.6.0](CHANGELOG.md). A `Fact` model (an entity-attribute-value triple with
+no timestamp) sits alongside `Event`, with its own `FactBase`, `FactParser` and
+`FactDetection` interfaces. Five state parsers (`/etc/passwd`, `/etc/group`,
+`/etc/sudoers`, `authorized_keys`, systemd units) feed five detections: duplicate UID 0
+(THN-0040), unexpected sudoers grant (THN-0041), suspicious authorised key (THN-0042),
+unit from a world-writable path (THN-0043), and service account with a login shell
+(THN-0044).
 
-- A second account with UID 0 in `/etc/passwd`
-- An unexpected `NOPASSWD: ALL` line in `/etc/sudoers`
-- An SSH key in `authorized_keys` that nobody recognises
-- A systemd unit pointing at `/tmp`
-
-None of these have a meaningful timestamp, so none of them fit `Event`. Forcing them in
-would mean inventing a time, which the project already refuses to do elsewhere.
-
-**The work.** A second model alongside `Event`:
-
-```python
-@dataclass
-class Fact:
-    subject: str        # "account:root", "unit:evil.service"
-    attribute: str      # "uid", "shell", "exec_start"
-    value: str
-    source: str
-    metadata: dict
-```
-
-Plus a `FactDetection` interface, and parsers for `/etc/passwd`, `/etc/group`,
-`/etc/sudoers`, `authorized_keys` and systemd unit files. The collector already gathers
-most of these — they are currently collected and then ignored.
-
-**Why now.** This is a model change, and model changes get more expensive with every
-parser added. Six is a good number to do it at; fifteen would not be.
-
-**Expected rules:** duplicate UID 0, unexpected sudoers grant, SSH key with an unusual
-comment or type, systemd unit executing from a world-writable path, service account with a
-login shell.
+The model change landed here, at six parsers, precisely because it would only get more
+expensive later — everything below builds on top of it.
 
 ---
 

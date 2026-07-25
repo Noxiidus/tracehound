@@ -124,6 +124,17 @@ for event in result.timeline.by_ip("65.2.161.68"):
 | `journal` | `journalctl -o json` output | JSON Lines or a JSON array. Needed on hosts where `auth.log` does not exist. |
 | `auth.log` | `auth.log`, `secure` | sshd, sudo, PAM, useradd/usermod/groupadd, systemd-logind. Both syslog and ISO-8601 timestamps. |
 
+State artifacts describe what a host *is* rather than what happened to it, so they produce
+timeless `Fact`s (an entity-attribute-value model) rather than timeline events:
+
+| Parser | Files | Notes |
+|---|---|---|
+| `passwd` | `/etc/passwd` | One `account:<name>` subject per line, carrying uid, gid, shell, home, gecos. |
+| `group` | `/etc/group` | `group:<name>` with gid and member list — the standing membership no login event records. |
+| `sudoers` | `/etc/sudoers`, `sudoers.d/*` | User specs broken into runas / NOPASSWD / commands; joins line continuations; keeps `Defaults` and aliases. |
+| `authorized_keys` | `authorized_keys`, `authorized_keys2` | Options-before-type parsed correctly; records key type, comment, SHA256 fingerprint, inferred account. |
+| `systemd_unit` | `*.service` and friends | ExecStart*, User, WorkingDirectory, Type, install targets — the keys that decide what a unit runs and as whom. |
+
 Collect a journal export with:
 
 ```bash
@@ -150,6 +161,15 @@ claims it — and that ordering cannot be left to a formatter's whim.
 | THN-0030 | Medium | Gap in log coverage — silence in an otherwise active log | T1070.002 |
 | THN-0031 | High | Binary login database truncated mid-record | T1070.002 |
 | THN-0032 | High | Shell history missing for an account that ran privileged commands | T1070.003 |
+| THN-0040 | Critical | Multiple, or non-root, accounts holding UID 0 | T1136.001, T1078.003 |
+| THN-0041 | High | Passwordless or wildcard sudoers grant to a non-standard principal | T1548.003 |
+| THN-0042 | High/Med | Authorised SSH key forcing an interpreter, or using a deprecated algorithm | T1098.004, T1021.004 |
+| THN-0043 | High | systemd unit executing from a world-writable path (`/tmp`, `/var/tmp`, `/dev/shm`) | T1543.002 |
+| THN-0044 | Medium | System account (UID below 1000) with an interactive login shell | T1136.001 |
+
+Rules THN-0040..0044 reason over state facts rather than the timeline, so they fire even
+on a host whose logs have been wiped — the backdoor account, key or unit is still sitting
+in the filesystem.
 
 ### Tuning
 

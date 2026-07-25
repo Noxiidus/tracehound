@@ -66,6 +66,111 @@ def write_wtmp(path: Path, records: list[bytes]) -> Path:
     return path
 
 
+# --- State artifacts (facts) --------------------------------------------------------
+
+
+def _write(path: Path, text: str) -> Path:
+    path.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+    return path
+
+
+def write_passwd(path: Path, lines: list[str]) -> Path:
+    """Each line is a full ``name:x:uid:gid:gecos:home:shell`` record."""
+    return _write(path, "\n".join(lines))
+
+
+def write_group(path: Path, lines: list[str]) -> Path:
+    return _write(path, "\n".join(lines))
+
+
+def write_sudoers(path: Path, lines: list[str]) -> Path:
+    return _write(path, "\n".join(lines))
+
+
+def write_authorized_keys(path: Path, lines: list[str]) -> Path:
+    return _write(path, "\n".join(lines))
+
+
+def write_unit(path: Path, sections: dict[str, dict[str, str]]) -> Path:
+    """Render a systemd unit from ``{section: {key: value}}``."""
+    blocks = []
+    for section, entries in sections.items():
+        rendered = "\n".join(f"{key}={value}" for key, value in entries.items())
+        blocks.append(f"[{section}]\n{rendered}")
+    return _write(path, "\n\n".join(blocks))
+
+
+def backdoor_state_scenario(tmp: Path) -> Path:
+    """A directory of state artifacts carrying one of every 0.6.0 finding.
+
+    The shape mirrors a host an intruder has already established persistence on: a second
+    UID-0 account, a passwordless sudoers grant, a forced-command SSH key, a service unit
+    running from /tmp, and a daemon account handed a login shell. Every artifact also
+    contains benign entries so the detections have to discriminate, not just fire.
+    """
+    root = tmp / "host"
+    root.mkdir()
+
+    write_passwd(
+        root / "passwd",
+        [
+            "root:x:0:0:root:/root:/bin/bash",
+            "daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin",
+            "www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin",
+            # backdoor #1: a second UID-0 account
+            "systemd-network:x:0:0::/run/systemd:/bin/bash",
+            # backdoor #2: a service account with a real shell
+            "postfix:x:114:120::/var/spool/postfix:/bin/bash",
+            "cyberjunkie:x:1002:1002::/home/cyberjunkie:/bin/bash",
+        ],
+    )
+    write_group(
+        root / "group",
+        [
+            "root:x:0:",
+            "sudo:x:27:cyberjunkie",
+            "www-data:x:33:",
+        ],
+    )
+    write_sudoers(
+        root / "sudoers",
+        [
+            "Defaults env_reset",
+            "root ALL=(ALL:ALL) ALL",
+            "%sudo ALL=(ALL:ALL) ALL",
+            # backdoor #3: passwordless full sudo to a normal user
+            "cyberjunkie ALL=(ALL) NOPASSWD: ALL",
+        ],
+    )
+    ssh_dir = root / "home" / "cyberjunkie" / ".ssh"
+    ssh_dir.mkdir(parents=True)
+    write_authorized_keys(
+        ssh_dir / "authorized_keys",
+        [
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIProperKeyBlobHere admin@ops",
+            # backdoor #4: a forced-command key that spawns a shell
+            'command="/bin/bash -i" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBackdoorKeyBlob evil@kali',
+        ],
+    )
+    # backdoor #5: a unit running from /tmp
+    write_unit(
+        root / "evil.service",
+        {
+            "Unit": {"Description": "System helper"},
+            "Service": {"ExecStart": "/tmp/.cache/beacon --daemon", "User": "root"},
+            "Install": {"WantedBy": "multi-user.target"},
+        },
+    )
+    write_unit(
+        root / "nginx.service",
+        {
+            "Unit": {"Description": "nginx"},
+            "Service": {"ExecStart": "/usr/sbin/nginx -g 'daemon on;'", "User": "www-data"},
+        },
+    )
+    return root
+
+
 def brute_force_scenario(tmp: Path, *, year: int = 2024) -> tuple[Path, Path]:
     """Build an auth.log + wtmp pair describing a full SSH intrusion.
 

@@ -10,10 +10,11 @@ from typing import Any
 
 from . import __version__
 from .config import Config
-from .detections import run_all
+from .detections import order_findings, run_all, run_all_facts
 from .detections.base import Detection
+from .factbase import FactBase
 from .models import Finding
-from .parsers import ParseContext, parser_for
+from .parsers import ParseContext, fact_parser_for, parser_for
 from .timeline import Timeline
 
 _HASH_CHUNK = 1024 * 1024
@@ -41,6 +42,7 @@ class ArtifactRecord:
     sha256: str
     parser: str | None = None
     event_count: int = 0
+    fact_count: int = 0
     skipped_reason: str | None = None
 
     @property
@@ -54,6 +56,7 @@ class ArtifactRecord:
             "sha256": self.sha256,
             "parser": self.parser,
             "event_count": self.event_count,
+            "fact_count": self.fact_count,
             "skipped_reason": self.skipped_reason,
         }
 
@@ -62,6 +65,7 @@ class ArtifactRecord:
 class ScanResult:
     timeline: Timeline
     findings: list[Finding]
+    factbase: FactBase = field(default_factory=FactBase)
     artifacts: list[ArtifactRecord] = field(default_factory=list)
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     tool_version: str = __version__
@@ -114,7 +118,8 @@ def scan(
     """
     ctx = ParseContext(default_year=year)
     timeline = Timeline()
-    result = ScanResult(timeline=timeline, findings=[])
+    factbase = FactBase()
+    result = ScanResult(timeline=timeline, findings=[], factbase=factbase)
 
     for file_path in collect_files(paths):
         try:
@@ -133,24 +138,45 @@ def scan(
 
         record = ArtifactRecord(path=file_path, size=size, sha256=digest)
 
+        # Event parsers are tried first; only if none claims the file do we offer it to
+        # the state parsers. The two never overlap — a state artifact is not valid syslog —
+        # so order is a small optimisation, not a correctness question.
         parser = parser_for(file_path)
-        if parser is None:
-            record.skipped_reason = "no parser matched"
+        if parser is not None:
+            try:
+                events = list(parser.parse(file_path, ctx))
+            except (OSError, ValueError) as exc:
+                record.skipped_reason = f"{type(exc).__name__}: {exc}"
+                result.artifacts.append(record)
+                continue
+            timeline.add(events)
+            record.parser = parser.name
+            record.event_count = len(events)
             result.artifacts.append(record)
             continue
 
-        try:
-            events = list(parser.parse(file_path, ctx))
-        except (OSError, ValueError) as exc:
-            record.skipped_reason = f"{type(exc).__name__}: {exc}"
+        fact_parser = fact_parser_for(file_path)
+        if fact_parser is not None:
+            try:
+                facts = list(fact_parser.parse(file_path, ctx))
+            except (OSError, ValueError) as exc:
+                record.skipped_reason = f"{type(exc).__name__}: {exc}"
+                result.artifacts.append(record)
+                continue
+            factbase.add(facts)
+            record.parser = fact_parser.name
+            record.fact_count = len(facts)
             result.artifacts.append(record)
             continue
 
-        timeline.add(events)
-        record.parser = parser.name
-        record.event_count = len(events)
+        record.skipped_reason = "no parser matched"
         result.artifacts.append(record)
 
     timeline.sort()
-    result.findings = run_all(timeline, config or Config(), extra_detections)
+    factbase.sort()
+
+    active = config or Config()
+    findings = run_all(timeline, active, extra_detections)
+    findings.extend(run_all_facts(factbase, active))
+    result.findings = order_findings(findings)
     return result
