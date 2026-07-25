@@ -7,7 +7,7 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
-from . import __version__, report
+from . import __version__, export, report
 from .case import build_case
 from .config import Config, ConfigError
 from .core import scan
@@ -41,9 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
     scan_cmd.add_argument(
         "-f",
         "--format",
-        choices=["text", "json", "csv", "html"],
+        choices=["text", "json", "csv", "html", "l2tcsv", "timesketch", "sigma"],
         default="text",
-        help="output format; csv emits the full timeline rather than findings",
+        help="output format. text/json/html report findings; csv and l2tcsv emit the whole "
+        "timeline (l2tcsv is the log2timeline/plaso super-timeline for Timesketch); "
+        "timesketch emits Timesketch JSONL; sigma emits one Sigma rule per finding",
     )
     scan_cmd.add_argument("-o", "--output", type=Path, help="write to a file instead of stdout")
     scan_cmd.add_argument(
@@ -285,6 +287,12 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         output = report.render_timeline_csv(result.timeline)
     elif args.format == "html":
         output = report.render_html(result.timeline, findings, result)
+    elif args.format == "l2tcsv":
+        output = export.render_l2tcsv(result.timeline, findings, result)
+    elif args.format == "timesketch":
+        output = export.render_timesketch_jsonl(result.timeline, findings, result)
+    elif args.format == "sigma":
+        output = export.render_sigma(findings, result)
     else:
         output = report.render_text(result.timeline, findings, result)
 

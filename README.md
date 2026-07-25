@@ -123,6 +123,7 @@ for event in result.timeline.by_ip("65.2.161.68"):
 | `cron` | `cron`, `cron.log` | `CROND` execution records, with the scheduled command extracted. |
 | `journal` | `journalctl -o json` output | JSON Lines or a JSON array. Needed on hosts where `auth.log` does not exist. |
 | `auth.log` | `auth.log`, `secure` | sshd, sudo, PAM, useradd/usermod/groupadd, systemd-logind. Both syslog and ISO-8601 timestamps. |
+| `l2tcsv` | log2timeline / plaso super-timeline CSV | Reads a plaso timeline back in so detections run over filesystem MACB timestamps and auth events together. The reverse of `--format l2tcsv`. |
 
 State artifacts describe what a host *is* rather than what happened to it, so they produce
 timeless `Fact`s (an entity-attribute-value model) rather than timeline events:
@@ -231,6 +232,35 @@ metadata field. `threshold` turns the rule from "report each match" into "report
 when enough matches cluster together".
 
 YAML needs `pip install tracehound[yaml]`; JSON needs nothing.
+
+## Interoperability
+
+tracehound feeds the platforms a DFIR shop already runs, and reads their timelines back:
+
+```bash
+tracehound scan /evidence -f l2tcsv    > timeline.csv     # plaso/log2timeline super-timeline
+tracehound scan /evidence -f timesketch > timeline.jsonl  # Timesketch, findings as tags
+tracehound scan /evidence -f sigma     > findings.yml      # one Sigma rule per finding
+```
+
+| Format | What it is |
+|---|---|
+| `l2tcsv` | The 17-column log2timeline CSV. Drops into Timesketch alongside filesystem, browser and registry timelines; the `notes` column carries the rule ids of findings that cite each event. |
+| `timesketch` | Newline-delimited JSON. Each finding's rule id, severity and ATT&CK techniques ride along on the events it implicates as `tag`s and fields, so the reasoning survives — not just the events. |
+| `sigma` | Each finding as a Sigma rule (event *and* state findings), with a stable id, ready to forward to a SIEM. |
+
+The reverse direction works too: point `scan` at an `l2tcsv` super-timeline produced by
+plaso and tracehound runs its detections over it, fusing filesystem MACB timestamps with
+the auth events it parses itself.
+
+```bash
+tracehound scan super-timeline.csv        # detections over a plaso timeline
+```
+
+l2tcsv is a lossy interchange format — it carries a timeline, not tracehound's full object
+graph — but the export enriches the `extra` column with each event's scalar metadata, so a
+round-trip (export, read back, re-scan) reproduces the original findings, not just the raw
+events.
 
 ## Design notes
 

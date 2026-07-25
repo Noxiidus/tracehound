@@ -7,6 +7,44 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.7.0] — 2026-07-25
+
+Interoperability. tracehound produced its own timeline in its own formats, and a tool that
+cannot feed the platforms a DFIR shop already runs — Timesketch, plaso, a SIEM — stays a
+curiosity no matter how good its analysis is. 0.7.0 makes a scan flow both ways: out into
+the standard formats, and back in from a super-timeline built by other tools.
+
+### Added
+
+- **`l2tcsv` export** (`--format l2tcsv`) — the log2timeline / plaso super-timeline CSV, so
+  tracehound events drop into Timesketch alongside filesystem, browser and registry
+  timelines. The `notes` column carries the rule ids of any findings that cite each event.
+- **Timesketch JSONL export** (`--format timesketch`) — the timeline as newline-delimited
+  JSON, with each finding's rule id, severity and ATT&CK techniques carried onto the events
+  it implicates as `tag`s and dedicated fields. The *reasoning* survives the export, not
+  just the events.
+- **Sigma export** (`--format sigma`) — every finding rendered as a Sigma rule (one YAML
+  document each) so a conclusion can be forwarded to a SIEM and made to fire elsewhere.
+  Both event and state (`Fact`) findings are exported; rule ids are deterministic, so a
+  re-export does not look like a new rule to a SIEM.
+- **`l2tcsv` as an input source** — a parser that reads a plaso super-timeline back into
+  the timeline, so detections run over a set that already fuses filesystem MACB timestamps
+  with the auth events tracehound parses itself. Rows in a non-UTC named zone are skipped
+  rather than guessed at.
+- The export enriches the l2tcsv `extra` column with each event's scalar metadata, so a
+  round-trip — export to a super-timeline, read it back, re-run detections — reproduces the
+  original findings rather than only the raw events.
+- Public API: `render_l2tcsv`, `render_timesketch_jsonl`, `render_sigma` from the package
+  root; the `tracehound.export` module and `tracehound.parsers.l2tcsv`.
+
+### Notes
+
+l2tcsv is a lossy interchange format by nature — it carries a timeline, not tracehound's
+full object graph. The `extra` enrichment recovers the scalar metadata the detections key
+on, but a value containing the column separator is dropped rather than corrupt the row, so
+a metadata field with embedded delimiters may not survive. The timeline, the messages and
+the fields the standard detections use always do.
+
 ## [0.6.0] — 2026-07-25
 
 State artifacts. Everything tracehound read until now was an *event* — something that

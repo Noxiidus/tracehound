@@ -25,6 +25,7 @@ from .bash_history import ShellHistoryParser
 from .cron import CronLogParser
 from .group import GroupParser
 from .journal import JournalParser
+from .l2tcsv import L2tCsvParser
 from .lastlog import LastlogParser
 from .passwd import PasswdParser
 from .sudoers import SudoersParser
@@ -38,6 +39,7 @@ __all__ = [
     "FactParser",
     "GroupParser",
     "JournalParser",
+    "L2tCsvParser",
     "LastlogParser",
     "ParseContext",
     "Parser",

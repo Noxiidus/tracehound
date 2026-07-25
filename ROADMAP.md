@@ -24,25 +24,24 @@ expensive later — everything below builds on top of it.
 
 ---
 
-## 0.7.0 — Interoperability
+## 0.7.0 — Interoperability — **shipped**
 
-**The problem.** tracehound currently produces its own timeline in its own formats. Real
-DFIR shops already run Timesketch, plaso and log platforms, and a tool that cannot feed
-them is a tool that stays a curiosity.
+Delivered in [0.7.0](CHANGELOG.md). A scan now flows both ways:
 
-**The work.**
+- **`l2tcsv` export** (`--format l2tcsv`) — the plaso/log2timeline super-timeline, so
+  tracehound output drops into Timesketch alongside filesystem and browser timelines, with
+  finding rule ids in the `notes` column.
+- **Timesketch JSONL export** (`--format timesketch`) — findings' rule ids, severity and
+  ATT&CK techniques ride along on the events they implicate as tags and fields, so the
+  reasoning survives the export, not just the events.
+- **`l2tcsv` as an input source** — a parser that reads a super-timeline back in and runs
+  detections against it, fusing filesystem MACB timestamps with auth events. The `extra`
+  column is enriched with scalar metadata so a round-trip re-fires the original detections.
+- **Sigma export** (`--format sigma`) — every finding, event- or fact-based, rendered as a
+  Sigma rule with a stable id, ready to forward to a SIEM.
 
-- **`l2tcsv` export** — the plaso/log2timeline super-timeline format, so tracehound output
-  drops into Timesketch alongside filesystem and browser timelines.
-- **Timesketch JSONL export** with tracehound findings as annotations, so the *reasoning*
-  survives the export, not just the events.
-- **plaso CSV as an input source** — a parser that reads a super-timeline and runs
-  tracehound detections against it. Filesystem MACB timestamps alongside auth events is a
-  strictly better timeline than either alone.
-- **Sigma-compatible output** for findings, so they can be forwarded to a SIEM.
-
-**Why after 0.6.0.** Facts need a representation in the export format, and defining that
-twice would be wasteful.
+The Sigma *output* here is distinct from the Sigma *input* below: this exports tracehound's
+conclusions as rules; 0.8.0 consumes the community's rules as detections.
 
 ---
 

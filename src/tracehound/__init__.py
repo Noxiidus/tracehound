@@ -15,11 +15,12 @@ Typical use::
 
 from __future__ import annotations
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 from .case import Case, Host, build_case
 from .config import Config
 from .core import ScanResult, scan
+from .export import render_l2tcsv, render_sigma, render_timesketch_jsonl
 from .factbase import FactBase
 from .models import Event, EventType, Fact, Finding, Severity
 from .timeline import Timeline
@@ -38,5 +39,8 @@ __all__ = [
     "Timeline",
     "__version__",
     "build_case",
+    "render_l2tcsv",
+    "render_sigma",
+    "render_timesketch_jsonl",
     "scan",
 ]
