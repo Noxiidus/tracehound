@@ -262,6 +262,7 @@ class TestJournalParser:
         assert event.user == "root"
         assert event.source_ip == "65.2.161.68"
         assert event.pid == 2411
+        assert event.process == "sshd"  # extracted from SYSLOG_IDENTIFIER
         assert event.timestamp == datetime(2024, 3, 6, 6, 31, 40, tzinfo=timezone.utc)
 
     def test_parses_json_array(self, tmp_path: Path) -> None:

@@ -97,11 +97,7 @@ class JournalParser(Parser):
         if message is None:
             return None
 
-        process = (
-            _as_text(entry.get("SYLOG_IDENTIFIER"))
-            or _as_text(entry.get("SYSLOG_IDENTIFIER"))
-            or _as_text(entry.get("_COMM"))
-        )
+        process = _as_text(entry.get("SYSLOG_IDENTIFIER")) or _as_text(entry.get("_COMM"))
 
         pid_text = _as_text(entry.get("_PID")) or _as_text(entry.get("SYSLOG_PID"))
         try:
