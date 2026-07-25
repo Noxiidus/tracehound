@@ -7,6 +7,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.7.2] — 2026-07-25
+
+### Fixed
+
+- **Journal parser: removed a dead, misspelled field lookup.** The parser tried
+  ``SYLOG_IDENTIFIER`` (missing an ``S``) before the correct ``SYSLOG_IDENTIFIER``. The
+  misspelled key never exists in journald output, so the lookup always returned nothing and
+  the correct fallback did the work — process identification was right by accident. The dead
+  line is gone and a test now asserts the process field is extracted, so a future edit to
+  the fallback cannot silently break it.
+
+Found during a full-repository review before the next feature line; no behavioural change.
+
 ## [0.7.1] — 2026-07-25
 
 ### Fixed
