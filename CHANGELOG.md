@@ -7,6 +7,18 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.7.1] — 2026-07-25
+
+### Fixed
+
+- **Sigma export produced invalid YAML** for any finding whose description ended in a colon
+  or contained one followed by a break — THN-0041 (unexpected sudoers grant) among them.
+  The hand-rolled emitter only quoted a colon *followed by a space*, but a plain YAML scalar
+  cannot carry a trailing colon at all, so the document failed to parse in a SIEM. The
+  scalar serialiser now quotes anything that is not conservatively plain-safe, and folds
+  embedded newlines. Regression tests exercise every rule family, not just the brute-force
+  chain that happened to have colon-free descriptions.
+
 ## [0.7.0] — 2026-07-25
 
 Interoperability. tracehound produced its own timeline in its own formats, and a tool that

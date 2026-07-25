@@ -22,6 +22,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -208,22 +209,28 @@ def render_timesketch_jsonl(
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+# A conservatively "plain-safe" YAML scalar: starts alphanumeric, contains only characters
+# that carry no structural meaning in block context, and does not trail whitespace. Anything
+# else — a colon anywhere, a quote, a bracket, a leading dash — is single-quoted instead of
+# reasoned about case by case, because a description ending in ':' is enough to break a plain
+# scalar and there are too many such characters to enumerate safely.
+_SAFE_PLAIN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _./+@-]*$")
+_YAML_RESERVED = frozenset({"true", "false", "null", "yes", "no", "on", "off", "~"})
+
+
 def _sigma_scalar(value: Any) -> str:
-    """Serialise one scalar as a safe single-line YAML value."""
+    """Serialise one scalar as a valid single-line YAML value."""
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int):
         return str(value)
-    text = str(value)
+    # Newlines cannot appear in a single-line scalar; fold them to spaces before quoting.
+    text = str(value).replace("\r", " ").replace("\n", " ")
     if text == "":
         return "''"
-    # Quote anything that could be mistaken for YAML structure or a non-string scalar.
-    if text[0] in "!&*?|>%@`\"'#-[]{},:" or ": " in text or " #" in text or text.strip() != text:
-        return "'" + text.replace("'", "''") + "'"
-    lowered = text.lower()
-    if lowered in {"true", "false", "null", "yes", "no", "~"}:
-        return "'" + text + "'"
-    return text
+    if _SAFE_PLAIN.match(text) and text == text.rstrip() and text.lower() not in _YAML_RESERVED:
+        return text
+    return "'" + text.replace("'", "''") + "'"
 
 
 def _sigma_yaml(node: Any, indent: int = 0) -> list[str]:

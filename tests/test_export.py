@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from synth import brute_force_scenario, write_passwd
+from synth import backdoor_state_scenario, brute_force_scenario, write_passwd
 from tracehound import render_l2tcsv, render_sigma, render_timesketch_jsonl, scan
-from tracehound.export import L2T_COLUMNS
+from tracehound.export import L2T_COLUMNS, _sigma_scalar
 from tracehound.models import EventType
 from tracehound.parsers import ParseContext, parser_for
 from tracehound.parsers.l2tcsv import L2tCsvParser
@@ -23,6 +23,13 @@ CTX = ParseContext(default_year=2024)
 
 def _scan(tmp_path: Path):
     brute_force_scenario(tmp_path, year=2024)
+    return scan([tmp_path], year=2024)
+
+
+def _scan_all(tmp_path: Path):
+    """Both event and state artifacts, so every rule family is represented."""
+    brute_force_scenario(tmp_path, year=2024)
+    backdoor_state_scenario(tmp_path)
     return scan([tmp_path], year=2024)
 
 
@@ -129,6 +136,38 @@ class TestSigmaExport:
         result = _scan(tmp_path)
         docs = [d for d in yaml.safe_load_all(render_sigma(result.findings, result)) if d]
         assert "�" not in "".join(d["description"] for d in docs)
+
+    def test_valid_yaml_across_every_rule_family(self, tmp_path: Path) -> None:
+        """Regression: a finding whose description ends in ':' (THN-0041) or starts with a
+        quote (THN-0013) must not break the hand-rolled YAML — plain scalars can't carry a
+        trailing colon. Exercise the full rule set, not just the brute-force chain."""
+        result = _scan_all(tmp_path)
+        rule_ids = {f.rule_id for f in result.findings}
+        assert {"THN-0041", "THN-0013"} <= rule_ids  # the two that tripped the emitter
+        docs = [d for d in yaml.safe_load_all(render_sigma(result.findings, result)) if d]
+        assert len(docs) == len(result.findings)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "ends with a colon:",  # THN-0041 shape — the original crash
+            "has: a colon-space",
+            "'starts with a quote",  # THN-0013 shape
+            "- starts with a dash",
+            "trailing space ",
+            "true",
+            "null",
+            "127.0.0.1",
+            "path/with/slashes and spaces:",
+            "",
+        ],
+    )
+    def test_sigma_scalar_stays_valid_yaml(self, value: str) -> None:
+        doc = f"key: {_sigma_scalar(value)}"
+        loaded = yaml.safe_load(doc)
+        # A quoted scalar round-trips to the original string (newlines folded); the point is
+        # that it parses at all and stays a string, never a bool/None/mapping.
+        assert isinstance(loaded["key"], str) or value == ""
 
     def test_state_findings_are_exported_too(self, tmp_path: Path) -> None:
         root = tmp_path / "h"
