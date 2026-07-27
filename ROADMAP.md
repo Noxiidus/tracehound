@@ -45,22 +45,24 @@ conclusions as rules; 0.8.0 consumes the community's rules as detections.
 
 ---
 
-## 0.8.0 — Sigma rule support
+## 0.8.0 — Sigma rule support — **shipped**
 
-**The problem.** The declarative rule format works, but it is tracehound's own. The
-industry already standardised on [Sigma](https://sigmahq.io/), and there is a body of
-public Linux rules that tracehound cannot use.
+Delivered in [0.8.0](CHANGELOG.md). `tracehound scan --sigma RULE_OR_DIR` loads a practical
+subset of the [Sigma](https://sigmahq.io/) specification onto the existing `Detection`
+interface: `logsource` (used to narrow which events a rule sees when the category or
+service is one tracehound maps), named `detection` selections with field modifiers
+(`contains`, `startswith`, `endswith`, `re`, `cidr`, `all`), `*`/`?` wildcards, keyword
+lists and lists of maps, and a `condition` mini-language (`and`/`or`/`not`, parentheses,
+`1 of them`, `all of them`, `N of pattern*`). `level` maps to severity, `attack.*` tags to
+ATT&CK techniques.
 
-**The work.** A loader for a practical subset of the Sigma specification — `logsource`,
-`detection` with selection/condition, `fields`, `level`, `tags` — mapped onto the existing
-`Detection` interface. Not the whole spec: the parts that make sense for host artifacts,
-with clear errors for the parts that do not.
+Deliberately *not* the whole spec: aggregation and correlation (`| count()`, `timeframe`)
+and unsupported modifiers raise a clear error rather than silently matching nothing —
+tracehound's own format already has threshold clustering for the counting case. The native
+YAML rule format stays; Sigma is verbose for "flag this command pattern".
 
-The native YAML format stays. Sigma is verbose for simple things, and "flag this command
-pattern" should not require a `condition` expression.
-
-**Why it matters.** This is the difference between "a tool one person wrote rules for" and
-"a tool that runs the rules a community already maintains".
+This is the difference between a tool one person wrote rules for and a tool that runs the
+rules a community already maintains.
 
 ---
 

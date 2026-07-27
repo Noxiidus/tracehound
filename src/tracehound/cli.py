@@ -17,6 +17,7 @@ from .manifest import Manifest, ManifestError
 from .models import Severity
 from .parsers import all_fact_parsers, all_parsers
 from .rules import RuleError, load_rules
+from .sigma import SigmaError, load_sigma_rules
 
 _SEVERITY_ORDER = [Severity.INFO, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
 
@@ -61,6 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         action="append",
         help="declarative rule file (JSON, or YAML with the [yaml] extra); repeatable",
+    )
+    scan_cmd.add_argument(
+        "--sigma",
+        type=Path,
+        action="append",
+        help="Sigma rule file or directory of rules (needs the [yaml] extra); a practical "
+        "subset of the spec is supported. Repeatable",
     )
     scan_cmd.add_argument(
         "--min-severity",
@@ -273,6 +281,13 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         try:
             extra.extend(load_rules(rule_file))
         except RuleError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+    for sigma_path in args.sigma or []:
+        try:
+            extra.extend(load_sigma_rules(sigma_path))
+        except SigmaError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
 

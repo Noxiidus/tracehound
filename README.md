@@ -233,6 +233,28 @@ when enough matches cluster together".
 
 YAML needs `pip install tracehound[yaml]`; JSON needs nothing.
 
+### Sigma rules
+
+Beyond its own format, tracehound runs a practical subset of
+[Sigma](https://sigmahq.io/) — so the public Linux rules a community already maintains
+become first-class detections:
+
+```bash
+tracehound scan /var/log --sigma rules/linux/ --sigma one-off.yml
+```
+
+Supported: `logsource` (narrows which events a rule sees when its category/service maps to
+tracehound's model), named `detection` selections, the `contains` / `startswith` /
+`endswith` / `re` / `cidr` / `all` field modifiers, `*`/`?` wildcards, keyword lists, and a
+`condition` mini-language (`and` / `or` / `not`, parentheses, `1 of them`, `all of them`,
+`N of selection*`). `level` becomes the severity; `attack.*` tags become ATT&CK techniques.
+
+Field names are mapped onto tracehound's event model (`CommandLine`, `Image`, `User`,
+`SourceIp`, …), with unrecognised fields falling back to event metadata — so a rule written
+for another pipeline may need its field names adjusted. Aggregation and correlation
+(`| count()`, `timeframe`) and unsupported modifiers are rejected with a clear error rather
+than loaded as a rule that silently matches nothing. Needs the `[yaml]` extra.
+
 ## Interoperability
 
 tracehound feeds the platforms a DFIR shop already runs, and reads their timelines back:

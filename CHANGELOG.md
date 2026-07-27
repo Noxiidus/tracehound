@@ -7,6 +7,39 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.0] — 2026-07-25
+
+Sigma rule support. The declarative rule format works, but it is tracehound's own — and the
+industry standardised on [Sigma](https://sigmahq.io/), where a large body of public Linux
+detection rules already lives. A triage tool that cannot run them leaves that knowledge on
+the table. 0.8.0 loads a practical subset of Sigma onto the existing detection interface, so
+a community rule is a first-class detection.
+
+### Added
+
+- **`tracehound scan --sigma RULE_OR_DIR`** (repeatable) — load Sigma rules from a file (one
+  or more YAML documents) or a directory of them. Each rule becomes a `Detection` that runs
+  alongside the built-in and declarative rules.
+- **Supported subset:** `logsource` (narrows which events a rule sees when its category or
+  service maps to tracehound's model), named `detection` selections, field modifiers
+  `contains` / `startswith` / `endswith` / `re` / `cidr` / `all`, `*` and `?` wildcards in
+  plain values, keyword lists, lists of maps, and a `condition` mini-language — `and`,
+  `or`, `not`, parentheses, `1 of them`, `all of them`, `N of pattern*`. `level` maps to
+  severity; `attack.*` `tags` map to ATT&CK techniques.
+- **`load_sigma_rules()`** and the `tracehound.sigma` module for library use.
+- Sigma field names are resolved against tracehound's event model (`CommandLine`, `Image`,
+  `User`, `SourceIp`, …), with an unrecognised field falling back to event metadata.
+
+### Notes
+
+Deliberately *not* the whole spec. Aggregation and correlation (`| count() > N`,
+`timeframe`) and any modifier outside the supported set raise a clear `SigmaError` rather
+than loading a rule that appears to run but silently matches nothing — tracehound's own
+declarative format already provides threshold clustering for the counting case. Because
+Sigma's field vocabulary is open, a rule written for a different pipeline may need its field
+names adjusted; the mapping is documented and honest about being a mapping. Sigma is YAML, so
+this needs the `[yaml]` extra.
+
 ## [0.7.2] — 2026-07-25
 
 ### Fixed
