@@ -231,8 +231,12 @@ def spec_from_mapping(data: dict[str, Any]) -> RuleSpec:
         )
 
     count = threshold.get("count")
-    if count is not None and (not isinstance(count, int) or count < 1):
+    if count is not None and (not isinstance(count, int) or isinstance(count, bool) or count < 1):
         raise RuleError(f"{rule_id}: threshold.count must be a positive integer")
+
+    window = threshold.get("window_seconds", 300)
+    if not isinstance(window, int) or isinstance(window, bool) or window < 1:
+        raise RuleError(f"{rule_id}: threshold.window_seconds must be a positive integer")
 
     return RuleSpec(
         rule_id=rule_id,
@@ -246,7 +250,7 @@ def spec_from_mapping(data: dict[str, Any]) -> RuleSpec:
         users=set(_as_list(match.get("user"))),
         source_ips=set(_as_list(match.get("source_ip"))),
         threshold_count=count,
-        threshold_window=int(threshold.get("window_seconds", 300)),
+        threshold_window=window,
         group_by=str(group_by) if group_by else None,
     )
 

@@ -7,6 +7,24 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.4] — 2026-07-27
+
+### Fixed
+
+- **Declarative rule loader crashed on a non-integer `threshold.window_seconds`.** The
+  `count` field was validated, but `window_seconds` was passed straight to `int()`, so a
+  value like `"soon"` raised a bare `ValueError` that escaped the loader (the CLI only
+  catches `RuleError`) and crashed the scan. It now raises a clear `RuleError`, same as
+  `count`. The `count` and `window_seconds` checks also now reject booleans, which `int()`
+  would otherwise have silently accepted as 1/0.
+
+This was the single defect surfaced by a large fuzzing pass — thousands of randomised rules,
+configs, Sigma documents, artifacts and multi-host cases — which otherwise confirmed the
+parsers never crash and never emit a non-UTC event, every report format renders and stays
+valid, scans are deterministic, and every finding serialises. It is the same class of bug as
+the 0.8.1 Sigma `logsource` crash: a malformed rule file must fail with a clear error, never
+an uncaught exception.
+
 ## [0.8.3] — 2026-07-27
 
 ### Fixed

@@ -516,6 +516,28 @@ class TestDeclarativeRules:
         with pytest.raises(RuleError, match="cannot group by"):
             load_rules(rules)
 
+    def test_bad_window_seconds_rejected(self, tmp_path: Path) -> None:
+        """A non-integer threshold.window_seconds must raise RuleError, not a bare
+        ValueError that escapes the loader and crashes the scan."""
+        rules = tmp_path / "rules.json"
+        rules.write_text(
+            json.dumps(
+                {
+                    "rules": [
+                        {
+                            "id": "X",
+                            "title": "x",
+                            "match": {"user": "root"},
+                            "threshold": {"count": 5, "window_seconds": "soon"},
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(RuleError, match="window_seconds must be a positive integer"):
+            load_rules(rules)
+
 
 # ---------------------------------------------------------------------------------- cli
 
