@@ -286,7 +286,7 @@ def render_html(
             <span class="sev" style="background:{_SEVERITY_COLOUR[finding.severity]}">
               {finding.severity.value.upper()}</span>
             <h2>{html.escape(finding.title)}</h2>
-            <p class="meta">{finding.rule_id} &middot;
+            <p class="meta">{html.escape(finding.rule_id)} &middot;
                {_fmt(finding.first_seen)} .. {_fmt(finding.last_seen)} UTC &middot;
                {evidence_meta}</p>
           </header>

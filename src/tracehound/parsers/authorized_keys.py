@@ -71,7 +71,10 @@ def _split_line(line: str) -> tuple[str, str, str, str] | None:
         if token in KEY_TYPES:
             if index + 1 >= len(tokens):
                 return None
-            options = line.split(token, 1)[0].strip()
+            # Reconstruct options from the tokens before the key type, not by splitting the
+            # line on the type string — an option like environment="ssh-rsa=1" contains that
+            # string as a substring and would truncate the options field.
+            options = " ".join(tokens[:index])
             blob = tokens[index + 1]
             comment = " ".join(tokens[index + 2 :]).strip()
             return options, token, blob, comment

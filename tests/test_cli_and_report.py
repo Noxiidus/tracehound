@@ -47,6 +47,35 @@ class TestReports:
         assert "<script" not in output.lower()
         assert 'src="http' not in output
 
+    def test_html_escapes_user_controlled_fields(self) -> None:
+        """A finding whose rule_id/title/description come from a loaded rule (e.g. Sigma)
+        must not inject markup into the shared HTML report."""
+        from datetime import datetime, timezone
+
+        from tracehound.models import Event, EventType, Finding, Severity
+        from tracehound.timeline import Timeline
+
+        event = Event(
+            timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            source="s",
+            event_type=EventType.OTHER,
+            message="<img src=x onerror=alert(1)>",
+        )
+        finding = Finding(
+            rule_id="<script>alert('id')</script>",
+            title="<script>alert('title')</script>",
+            severity=Severity.HIGH,
+            description="<b>desc</b>",
+            events=[event],
+        )
+        timeline = Timeline([event])
+        output = render_html(timeline, [finding])
+
+        assert "<script>alert('id')</script>" not in output
+        assert "<script>alert('title')</script>" not in output
+        assert "<img src=x onerror" not in output
+        assert "&lt;script&gt;" in output  # it is present, but escaped
+
     def test_empty_report_is_honest(self, tmp_path: Path) -> None:
         from synth import write_auth_log
 

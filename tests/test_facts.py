@@ -180,6 +180,18 @@ class TestAuthorizedKeysParser:
         assert by_attr["options"] == 'command="/bin/bash -i"'
         assert by_attr["comment"] == "evil@kali"
 
+    def test_option_containing_key_type_substring(self, tmp_path: Path) -> None:
+        """Options must be taken from the tokens before the key type, not by splitting on
+        the type string — an option value can contain that string as a substring."""
+        path = write_authorized_keys(
+            tmp_path / "authorized_keys",
+            ['environment="ssh-rsa=1" ssh-rsa AAAAB3NzaC1yc2EAAAAblob user@host'],
+        )
+        by_attr = {f.attribute: f.value for f in AuthorizedKeysParser().parse(path, CTX)}
+        assert by_attr["type"] == "ssh-rsa"
+        assert by_attr["options"] == 'environment="ssh-rsa=1"'
+        assert by_attr["comment"] == "user@host"
+
 
 class TestSystemdUnitParser:
     def test_parses_selected_keys(self, tmp_path: Path) -> None:

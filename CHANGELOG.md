@@ -7,6 +7,27 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.2] — 2026-07-27
+
+### Security
+
+- **HTML report did not escape the finding rule id.** Every other field in the HTML report
+  is escaped, but `rule_id` was interpolated raw. For the built-in rules that is a constant
+  like `THN-0001`, but a Sigma rule's id (and title, used as a fallback id) comes from
+  user-supplied YAML — so a crafted rule could inject markup into the report, which is often
+  shared. The id is now escaped like everything else, and a test injects `<script>` through
+  the rule id, title, description and event message to prove it.
+
+### Fixed
+
+- **`authorized_keys` options field was truncated** when an option value contained a key-type
+  string as a substring (for example `environment="ssh-rsa=1" ssh-rsa …`). The parser split
+  the line on the type string rather than on the token boundary; it now reconstructs the
+  options from the tokens preceding the key type. The key, blob and comment were already
+  correct — only the options field was affected, which THN-0042 reads.
+
+Found in a continued full-repository bug review.
+
 ## [0.8.1] — 2026-07-27
 
 ### Fixed
