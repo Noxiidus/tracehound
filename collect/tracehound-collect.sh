@@ -34,7 +34,7 @@
 
 set -eu
 
-VERSION="0.5.0"
+VERSION="0.8.3"
 OUT=""
 REFERENCE=""
 HOSTNAME_OVERRIDE=""
@@ -44,7 +44,7 @@ while getopts "o:r:n:h" opt; do
         o) OUT="$OPTARG" ;;
         r) REFERENCE="$OPTARG" ;;
         n) HOSTNAME_OVERRIDE="$OPTARG" ;;
-        h) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        h) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "usage: $0 [-o OUTPUT_DIR] [-r REFERENCE_UTC] [-n HOSTNAME]" >&2; exit 2 ;;
     esac
 done

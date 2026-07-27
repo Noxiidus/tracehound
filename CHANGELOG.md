@@ -7,6 +7,22 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.3] — 2026-07-27
+
+### Fixed
+
+- **Collector `-h` help was truncated.** `tracehound-collect.sh -h` printed the usage block
+  up to the "Example" heading but cut off the example command itself (an off-by-one in the
+  `sed` line range). The example is now shown.
+- **Collector version string was stale.** `tracehound-collect.sh` still stamped manifests
+  with `version: 0.5.0` although the toolset had moved to 0.8.x, misrepresenting which
+  collector produced the evidence. It now tracks the release version. (The collector's
+  `VERSION` is a third place the release bump must touch, alongside `pyproject.toml` and
+  `__init__.py` — it had been silently missed since 0.5.0.)
+
+A full HTML-report injection sweep in this review — adversarial markup pushed through every
+finding, event, fact and artifact field — confirmed the 0.8.2 escaping fix left no siblings.
+
 ## [0.8.2] — 2026-07-27
 
 ### Security
