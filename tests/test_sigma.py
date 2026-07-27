@@ -212,6 +212,19 @@ class TestLogsourceNarrowing:
         assert rule.event_types is None
         assert rule.matches(_event("x", user="root", event_type=EventType.LOGIN_SUCCESS))
 
+    def test_malformed_logsource_is_ignored_not_fatal(self) -> None:
+        """A non-mapping logsource (advisory only) must not crash the loader."""
+        for bad in ("linux", ["a"], 3):
+            rule = build_rule(
+                {
+                    "title": "T",
+                    "logsource": bad,
+                    "detection": {"s": {"user": "x"}, "condition": "s"},
+                }
+            )
+            assert rule.event_types is None
+            assert rule.logsource == {}
+
 
 class TestErrors:
     @pytest.mark.parametrize(
@@ -239,6 +252,11 @@ class TestErrors:
                 {"title": "T", "level": "bogus", "detection": {"s": {"a": "b"}, "condition": "s"}},
                 "level",
             ),
+            (
+                {"title": "T", "detection": {"s": {"a": "b"}, "condition": "0 of them"}},
+                "at least 1",
+            ),
+            ({"title": "T", "detection": {"s": {}, "condition": "s"}}, "empty"),
         ],
     )
     def test_clear_errors(self, doc: dict, fragment: str) -> None:

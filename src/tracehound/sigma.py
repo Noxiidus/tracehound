@@ -261,6 +261,10 @@ class _OrSelection(_Selection):
 
 def _compile_selection(value: Any, where: str) -> _Selection:
     if isinstance(value, dict):
+        if not value:
+            # An empty map matches every event (all of no criteria), which is almost
+            # always a mistake and would make the whole rule fire on everything.
+            raise SigmaError(f"selection '{where}' is empty")
         return _MapSelection([_build_field_matcher(k, v) for k, v in value.items()])
     if isinstance(value, list):
         if value and all(isinstance(item, dict) for item in value):
@@ -405,6 +409,8 @@ class _ConditionParser:
             need = 1
         else:
             need = int(count_token)
+            if need < 1:
+                raise SigmaError(f"quantifier count must be at least 1, got '{count_token}'")
         return _Quantifier(matched, min(need, len(matched)))
 
 
@@ -552,8 +558,15 @@ def build_rule(data: dict[str, Any]) -> SigmaRule:
 
     condition = _parse_condition(detection["condition"], set(selections))
 
-    logsource_raw = data.get("logsource") or {}
-    logsource = {k: str(v) for k, v in logsource_raw.items() if isinstance(logsource_raw, dict)}
+    # logsource is advisory in tracehound (it only narrows which events a rule sees), so a
+    # malformed one is ignored rather than fatal — a non-mapping value simply means no
+    # narrowing, not a rejected rule.
+    logsource_raw = data.get("logsource")
+    logsource = (
+        {str(k): str(v) for k, v in logsource_raw.items()}
+        if isinstance(logsource_raw, dict)
+        else {}
+    )
 
     rule_id = str(data.get("id") or title).strip()
     return SigmaRule(

@@ -7,6 +7,25 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.1] — 2026-07-27
+
+### Fixed
+
+- **Sigma loader crashed on a malformed `logsource`.** A rule whose `logsource` was a scalar
+  or list instead of a mapping raised an uncaught `AttributeError` (`'str' object has no
+  attribute 'items'`) and took the whole scan down. Since `logsource` is advisory in
+  tracehound — it only narrows which events a rule sees — a non-mapping value is now ignored
+  (the rule runs against the whole timeline) rather than being fatal.
+
+### Hardened
+
+- A quantifier count of zero (`0 of them`) and an empty selection map (`selection: {}`) now
+  raise a clear `SigmaError`. Both previously compiled to a rule that silently matched every
+  event — the exact "appears to run but does the wrong thing" failure the loader is meant to
+  reject.
+
+Found in a targeted review of the 0.8.0 Sigma code.
+
 ## [0.8.0] — 2026-07-25
 
 Sigma rule support. The declarative rule format works, but it is tracehound's own — and the
