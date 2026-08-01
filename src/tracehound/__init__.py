@@ -15,7 +15,7 @@ Typical use::
 
 from __future__ import annotations
 
-__version__ = "0.8.5"
+__version__ = "0.8.6"
 
 from .case import Case, Host, build_case
 from .config import Config

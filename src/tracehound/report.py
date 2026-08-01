@@ -223,6 +223,23 @@ def render_case_json(case: Case) -> str:
     return json.dumps(payload, indent=2)
 
 
+_CSV_INJECTION_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: str) -> str:
+    """Neutralise spreadsheet formula injection in a human-facing CSV cell.
+
+    A log line an attacker controls can begin with ``=``/``+``/``-``/``@`` (or a tab/CR),
+    which Excel and LibreOffice execute as a formula the moment the analyst opens the file.
+    Prefixing with a single quote makes those apps show the literal text and run nothing.
+    Only this timeline CSV is guarded: the l2tcsv export feeds plaso/Timesketch, which do not
+    execute formulas and whose values a quote would corrupt.
+    """
+    if value and value[0] in _CSV_INJECTION_PREFIXES:
+        return "'" + value
+    return value
+
+
 def render_timeline_csv(timeline: Timeline) -> str:
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
@@ -235,10 +252,10 @@ def render_timeline_csv(timeline: Timeline) -> str:
                 event.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 event.source,
                 event.event_type.value,
-                event.user or "",
-                event.source_ip or "",
-                event.process or "",
-                event.message,
+                _csv_safe(event.user or ""),
+                _csv_safe(event.source_ip or ""),
+                _csv_safe(event.process or ""),
+                _csv_safe(event.message),
             ]
         )
     return out.getvalue()

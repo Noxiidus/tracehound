@@ -7,6 +7,28 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.6] — 2026-08-01
+
+### Security
+
+- **CSV formula injection in the timeline export.** A log field an attacker controls (a
+  username, a message) can begin with `=`, `+`, `-`, `@` or a tab/CR, which Excel and
+  LibreOffice execute as a formula the moment an analyst opens the exported CSV. Such cells
+  in `--format csv` are now prefixed with a single quote — the value is displayed unchanged
+  but never executed. The l2tcsv export is deliberately left verbatim: it feeds
+  plaso/Timesketch, which do not execute formulas and whose values a quote would corrupt.
+
+### Fixed
+
+- **Directory symlink cycles could hang a scan forever.** `collect_files` expanded
+  directories with `Path.rglob`, which follows symlinked directories, so pointing a scan at
+  a tree containing a symlink loop (easy to hit on `/` or a mounted image) generated paths
+  endlessly before the de-duplication ran. It now walks with `os.walk(followlinks=False)`,
+  which cannot loop; symlinked *files* are still collected, only descending through a
+  symlinked *directory* is refused.
+
+Both found in a continued security-oriented repository review.
+
 ## [0.8.5] — 2026-07-27
 
 ### Fixed

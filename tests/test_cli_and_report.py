@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-from tracehound import scan
+from tracehound import render_l2tcsv, scan
 from tracehound.cli import main
+from tracehound.core import collect_files
+from tracehound.models import Event, EventType
 from tracehound.report import render_html, render_json, render_text, render_timeline_csv
+from tracehound.timeline import Timeline
 
 
 class TestReports:
@@ -76,6 +83,34 @@ class TestReports:
         assert "<img src=x onerror" not in output
         assert "&lt;script&gt;" in output  # it is present, but escaped
 
+    def test_timeline_csv_neutralises_formula_injection(self) -> None:
+        """An attacker-controlled log field beginning with a spreadsheet formula character
+        must be defanged in the human CSV so Excel/LibreOffice won't execute it."""
+        event = Event(
+            timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            source="auth.log",
+            event_type=EventType.OTHER,
+            message="=cmd|'/c calc'!A1",
+            user="@SUM(1+1)",
+        )
+        rows = list(csv.reader(io.StringIO(render_timeline_csv(Timeline([event])))))
+        cells = rows[1]
+        assert not any(c[:1] in ("=", "+", "@", "\t", "\r") for c in cells)
+        assert "'=cmd|'/c calc'!A1" in cells  # value preserved, just quoted
+        assert "'@SUM(1+1)" in cells
+
+    def test_l2tcsv_export_is_not_quote_mangled(self) -> None:
+        """l2tcsv feeds plaso/Timesketch, not Excel — it must keep values verbatim."""
+        event = Event(
+            timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            source="auth.log",
+            event_type=EventType.OTHER,
+            message="=formula",
+        )
+        out = render_l2tcsv(Timeline([event]), [])
+        assert "=formula" in out
+        assert "'=formula" not in out
+
     def test_empty_report_is_honest(self, tmp_path: Path) -> None:
         from synth import write_auth_log
 
@@ -88,6 +123,30 @@ class TestReports:
         result = scan([path], year=2024)
         output = render_text(result.timeline, result.findings)
         assert "not proof of a clean host" in output
+
+
+class TestCollectFiles:
+    def test_nested_tree_and_dedup(self, tmp_path: Path) -> None:
+        (tmp_path / "a" / "b").mkdir(parents=True)
+        (tmp_path / "top.log").write_text("x")
+        (tmp_path / "a" / "mid.log").write_text("y")
+        (tmp_path / "a" / "b" / "deep.log").write_text("z")
+        names = sorted(f.name for f in collect_files([tmp_path]))
+        assert names == ["deep.log", "mid.log", "top.log"]
+        # the same file passed twice is collected once
+        assert len(collect_files([tmp_path / "top.log", tmp_path / "top.log"])) == 1
+
+    def test_symlink_loop_does_not_hang(self, tmp_path: Path) -> None:
+        """Directory symlink cycles must not send collect_files into an infinite walk."""
+        sub = tmp_path / "a"
+        sub.mkdir()
+        (sub / "real.log").write_text("evidence")
+        try:
+            os.symlink(tmp_path, sub / "loop", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks not supported on this platform/user")
+        files = collect_files([tmp_path])  # would loop forever if symlinks were followed
+        assert any(f.name == "real.log" for f in files)
 
 
 class TestCli:

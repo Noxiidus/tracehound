@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -87,15 +88,35 @@ class ScanResult:
         }
 
 
+def _walk_files(root: Path) -> list[Path]:
+    """Every file under ``root``, sorted, without following directory symlinks.
+
+    ``Path.rglob`` follows symlinked directories, so a triage run pointed at ``/var/log`` or
+    a mounted image containing a symlink cycle would loop forever generating paths before the
+    de-duplication below ever runs. ``os.walk(followlinks=False)`` — its own default — cannot
+    loop. Symlinked *files* are still collected; only descending through a symlinked directory
+    is refused, which is the safe behaviour for untrusted evidence trees anyway.
+    """
+    out: list[Path] = []
+    for dirpath, _dirs, filenames in os.walk(root, followlinks=False):
+        base = Path(dirpath)
+        out.extend(base / name for name in filenames)
+    out.sort()
+    return out
+
+
 def collect_files(paths: list[Path]) -> list[Path]:
     """Expand directories into their files, preserving caller order and de-duplicating."""
     found: list[Path] = []
     seen: set[Path] = set()
 
     for path in paths:
-        candidates = sorted(p for p in path.rglob("*") if p.is_file()) if path.is_dir() else [path]
+        candidates = _walk_files(path) if path.is_dir() else [path]
         for candidate in candidates:
-            resolved = candidate.resolve()
+            try:
+                resolved = candidate.resolve()
+            except OSError:
+                resolved = candidate
             if resolved not in seen:
                 seen.add(resolved)
                 found.append(candidate)
