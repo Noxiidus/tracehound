@@ -125,6 +125,25 @@ class TestManifestLoading:
         with pytest.raises(ManifestError, match="must be a number or null"):
             Manifest.load(path)
 
+    def test_non_numeric_size_rejected(self, tmp_path: Path) -> None:
+        """A garbage artifact 'size' must raise ManifestError, not a bare ValueError that
+        escapes and crashes verify/case."""
+        path = tmp_path / "manifest.json"
+        path.write_text(
+            json.dumps({"hostname": "h", "artifacts": [{"path": "a", "size": "huge"}]}),
+            encoding="utf-8",
+        )
+        with pytest.raises(ManifestError, match="'size' must be a number"):
+            Manifest.load(path)
+
+    def test_numeric_string_size_accepted(self, tmp_path: Path) -> None:
+        path = tmp_path / "manifest.json"
+        path.write_text(
+            json.dumps({"hostname": "h", "artifacts": [{"path": "a", "size": "1024"}]}),
+            encoding="utf-8",
+        )
+        assert Manifest.load(path).artifacts[0].size == 1024
+
 
 class TestIntegrityVerification:
     def test_intact_collection_passes(self, tmp_path: Path) -> None:

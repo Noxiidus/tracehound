@@ -177,6 +177,14 @@ class TestMetadataMapping:
         )
         assert rule.attack_techniques == ["T1110.001", "T1078"]
 
+    @pytest.mark.parametrize("tags", [5, 1.5, True, {"a": 1}, None])
+    def test_malformed_tags_yield_no_techniques_not_a_crash(self, tags: object) -> None:
+        """A non-list 'tags' (advisory) must not raise a TypeError from iterating it."""
+        rule = build_rule(
+            {"title": "T", "tags": tags, "detection": {"s": {"user": "x"}, "condition": "s"}}
+        )
+        assert rule.attack_techniques == []
+
     def test_id_becomes_rule_id_else_title(self) -> None:
         with_id = build_rule(
             {"title": "T", "id": "abc-123", "detection": {"s": {"user": "x"}, "condition": "s"}}

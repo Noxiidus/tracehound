@@ -146,7 +146,7 @@ class Manifest:
                     path=rel,
                     source=str(entry.get("source", "")),
                     sha256=str(entry.get("sha256", "")),
-                    size=int(entry.get("size", 0) or 0),
+                    size=_as_size(entry.get("size"), path),
                 )
             )
 
@@ -166,6 +166,24 @@ class Manifest:
             artifacts=artifacts,
             skipped=[s for s in skipped if isinstance(s, dict)],
         )
+
+
+def _as_size(value: Any, path: Path) -> int:
+    """Artifact size in bytes — tolerant of a numeric string, fatal on nonsense.
+
+    A malformed manifest must fail with a :class:`ManifestError` the CLI can report, not a
+    bare ``ValueError`` from ``int()`` that escapes and crashes ``verify``/``case``.
+    """
+    if value in (None, ""):
+        return 0
+    if isinstance(value, bool):
+        raise ManifestError(f"{path}: artifact 'size' must be a number, not a boolean")
+    if isinstance(value, int):
+        return value
+    try:
+        return int(float(value))
+    except (TypeError, ValueError) as exc:
+        raise ManifestError(f"{path}: artifact 'size' must be a number, got {value!r}") from exc
 
 
 def _parse_time(value: Any) -> datetime | None:

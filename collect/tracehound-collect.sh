@@ -34,7 +34,7 @@
 
 set -eu
 
-VERSION="0.8.4"
+VERSION="0.8.5"
 OUT=""
 REFERENCE=""
 HOSTNAME_OVERRIDE=""

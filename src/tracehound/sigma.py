@@ -504,8 +504,14 @@ def _severity(level: Any) -> Severity:
 
 
 def _techniques(tags: Any) -> list[str]:
+    # tags is advisory; a malformed value (a bare scalar, or a non-list) yields no
+    # techniques rather than a TypeError from iterating a non-iterable.
+    if isinstance(tags, str):
+        tags = [tags]
+    elif not isinstance(tags, (list, tuple)):
+        return []
     out: list[str] = []
-    for tag in tags or []:
+    for tag in tags:
         text = str(tag)
         if text.lower().startswith("attack.t"):
             out.append(text.split(".", 1)[1].upper())

@@ -7,6 +7,26 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.5] — 2026-07-27
+
+### Fixed
+
+Two more instances of the "malformed input crashes with an uncaught exception instead of a
+typed error" bug class, found by extending the fuzzing pass to the manifest and Sigma
+metadata surfaces:
+
+- **Manifest loader crashed on a non-numeric artifact `size`.** A manifest with, say,
+  `"size": "huge"` raised a bare `ValueError` from `int()` that escaped and took down
+  `tracehound verify` / `case --manifest`. It now raises a clear `ManifestError`, and a
+  numeric string (`"1024"`) or float is accepted.
+- **Sigma loader crashed on a non-list `tags`.** A rule with `tags: 5` (or any non-list
+  scalar) raised `TypeError: 'int' object is not iterable` from iterating it. `tags` is
+  advisory, so a malformed value now yields no techniques rather than crashing.
+
+All four external-input loaders (declarative rules, Sigma, config, manifest) are now fuzzed
+clean — thousands of randomised documents each build or raise their own typed error, never
+an uncaught exception.
+
 ## [0.8.4] — 2026-07-27
 
 ### Fixed
