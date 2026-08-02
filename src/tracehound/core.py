@@ -170,9 +170,8 @@ def scan(
                 record.skipped_reason = f"{type(exc).__name__}: {exc}"
                 result.artifacts.append(record)
                 continue
-            timeline.add(events)
             record.parser = parser.name
-            record.event_count = len(events)
+            record.event_count = timeline.add(events)
             result.artifacts.append(record)
             continue
 

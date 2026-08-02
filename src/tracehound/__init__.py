@@ -24,7 +24,7 @@ from .export import render_l2tcsv, render_sigma, render_timesketch_jsonl
 from .factbase import FactBase
 from .models import Event, EventType, Fact, Finding, Severity
 from .sigma import load_sigma_rules
-from .timeline import Timeline
+from .timeline import Timeline, TimelineLike
 
 __all__ = [
     "Case",
@@ -38,6 +38,7 @@ __all__ = [
     "ScanResult",
     "Severity",
     "Timeline",
+    "TimelineLike",
     "__version__",
     "build_case",
     "load_sigma_rules",
