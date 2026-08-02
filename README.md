@@ -84,6 +84,10 @@ tracehound scan ./evidence -f csv -o timeline.csv
 # Non-zero exit if anything is found — for pipelines
 tracehound scan /var/log --min-severity high --fail-on-findings
 
+# Keep the timeline on disk (SQLite) for datasets too large for RAM — a year of
+# auth.log from a busy host. Findings are identical to the in-memory run.
+tracehound scan /evidence --sqlite timeline.db
+
 tracehound parsers   # what it can read
 tracehound rules     # what it looks for
 ```

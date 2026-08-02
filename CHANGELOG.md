@@ -7,6 +7,42 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.0] — 2026-08-01
+
+Scale. Everything lived in memory, which is fine for a triage snapshot and wrong for a year
+of `auth.log` from a busy host — millions of lines that do not fit in RAM. This release
+introduces an on-disk timeline behind an interface detections cannot tell apart from the
+in-memory one.
+
+### Added
+
+- **`TimelineLike` protocol** — the query surface detections rely on (iteration,
+  `of_type`/`by_ip`/`by_user`/`between`/`window`/`sources`, `start`/`end`, `add`, `sort`),
+  extracted so a second backend is a drop-in. Exported from the package. `Timeline` is now
+  documented as its in-memory implementation.
+- **`SqliteTimeline`** — an on-disk (or in-process) SQLite backend implementing the same
+  protocol, for datasets too large for memory. Timestamps are stored as ISO-8601 strings,
+  which — because every event is UTC — sort lexically in chronological order, so it yields
+  events in exactly the same `(timestamp, source, message)` order as the in-memory backend.
+  Only the standard-library `sqlite3` is used, so the package stays dependency-free.
+- **`scan(..., on_disk=PATH)`** and **`tracehound scan --sqlite [PATH]`** — keep the timeline
+  in SQLite instead of memory. Findings are identical either way; only where the events live
+  changes. Pass the flag alone for an in-process database, or a path to persist it.
+- **Streaming inserts** — `Timeline.add()` now accepts a lazy iterator and returns how many
+  events it appended, and `SqliteTimeline` inserts in batches, so a parser's events do not
+  all sit in memory at once.
+
+### Notes
+
+Detections, reports and exports now type against `TimelineLike` rather than the concrete
+`Timeline`, so either backend flows through the whole pipeline unchanged — a parametrised
+contract suite, a field-level round-trip test, a cross-backend equivalence test, and a full
+end-to-end scan all confirm the two produce identical output.
+
+The remaining *Scale* roadmap items — incremental scanning and CI throughput benchmarks —
+are deferred to a follow-up 0.9.x; the on-disk timeline is the load-bearing piece and ships
+now.
+
 ## [0.8.6] — 2026-08-01
 
 ### Security

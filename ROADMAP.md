@@ -66,23 +66,27 @@ rules a community already maintains.
 
 ---
 
-## 0.9.0 — Scale
+## 0.9.0 — Scale — **shipped (streaming + on-disk timeline)**
 
-**The problem.** Everything is currently held in memory. That is fine for a triage
-snapshot and wrong for a year of `auth.log` from a busy host, which runs to millions of
-lines.
+**The problem.** Everything was held in memory. Fine for a triage snapshot, wrong for a
+year of `auth.log` from a busy host, which runs to millions of lines.
 
-**The work.**
+Delivered in [0.9.0](CHANGELOG.md): the query surface detections rely on is now the
+`TimelineLike` protocol, and an on-disk **`SqliteTimeline`** (stdlib `sqlite3`, so still
+dependency-free) implements it. `scan(on_disk=PATH)` / `tracehound scan --sqlite [PATH]`
+keeps the timeline in SQLite for datasets too large for RAM; because events store an
+ISO-8601 UTC timestamp that sorts lexically in chronological order, both backends produce
+byte-identical findings. Inserts stream in batches; `add()` accepts a lazy iterator.
 
-- **Streaming parse** — parsers already yield, but `Timeline` materialises everything.
-- **Optional on-disk timeline** (SQLite) for datasets that do not fit in RAM, with the
-  same query surface so detections do not care which backend they are on.
+**Still to come in a 0.9.x follow-up:**
+
 - **Incremental scanning** — remember where a previous scan stopped and process only what
   is new, for repeated runs against a live host.
 - **Benchmarks in CI**, so a regression in throughput is caught rather than discovered.
 
-**Why last before 1.0.** Optimising before the model is settled means optimising the wrong
-thing twice.
+**Why Scale is last before 1.0.** Optimising before the model is settled means optimising
+the wrong thing twice — which is why the backend was made pluggable only after the event,
+fact, interop and Sigma models had settled.
 
 ---
 
