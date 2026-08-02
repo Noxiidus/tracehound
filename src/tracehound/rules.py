@@ -45,7 +45,7 @@ from typing import Any, ClassVar
 from .config import Config
 from .detections.base import Detection
 from .models import Event, EventType, Finding, Severity
-from .timeline import Timeline
+from .timeline import TimelineLike
 
 
 class RuleError(ValueError):
@@ -106,7 +106,7 @@ class DeclarativeDetection(Detection):
         self.description = spec.description  # type: ignore[misc]
         self.attack_techniques = list(spec.attack_techniques)  # type: ignore[misc]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         spec = self.spec
         matched = [
             e

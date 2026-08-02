@@ -16,7 +16,8 @@ from .detections.base import Detection
 from .factbase import FactBase
 from .models import Finding
 from .parsers import ParseContext, fact_parser_for, parser_for
-from .timeline import Timeline
+from .sqlite_timeline import SqliteTimeline
+from .timeline import Timeline, TimelineLike
 
 _HASH_CHUNK = 1024 * 1024
 
@@ -64,7 +65,7 @@ class ArtifactRecord:
 
 @dataclass(slots=True)
 class ScanResult:
-    timeline: Timeline
+    timeline: TimelineLike
     findings: list[Finding]
     factbase: FactBase = field(default_factory=FactBase)
     artifacts: list[ArtifactRecord] = field(default_factory=list)
@@ -129,6 +130,7 @@ def scan(
     year: int | None = None,
     config: Config | None = None,
     extra_detections: list[Detection] | None = None,
+    on_disk: str | Path | None = None,
 ) -> ScanResult:
     """Parse every recognised artifact under ``paths`` and run all detections.
 
@@ -136,9 +138,13 @@ def scan(
     ``/var/log`` will meet plenty of files it cannot read, and that is not an error
     worth aborting the whole run for. Every file is still hashed and listed, so the
     report can account for what was examined and what was not.
+
+    ``on_disk`` keeps the timeline in a SQLite database instead of memory: pass a path to
+    persist it, or ``":memory:"`` for an in-process database that still holds no ``Event``
+    objects. Detections behave identically either way — only where the events live changes.
     """
     ctx = ParseContext(default_year=year)
-    timeline = Timeline()
+    timeline: TimelineLike = SqliteTimeline(on_disk) if on_disk is not None else Timeline()
     factbase = FactBase()
     result = ScanResult(timeline=timeline, findings=[], factbase=factbase)
 

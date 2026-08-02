@@ -41,7 +41,7 @@ from typing import Any, ClassVar
 from .config import Config
 from .detections.base import Detection
 from .models import Event, EventType, Finding, Severity
-from .timeline import Timeline
+from .timeline import TimelineLike
 
 
 class SigmaError(ValueError):
@@ -605,7 +605,7 @@ class SigmaDetection(Detection):
         self.description = rule.description  # type: ignore[misc]
         self.attack_techniques = list(rule.attack_techniques)  # type: ignore[misc]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         rule = self.rule
         for event in timeline:
             if config.ip_allowed(event.source_ip) or config.account_allowed(event.user):

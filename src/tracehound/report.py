@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from . import attack
 from .models import Finding, Severity
-from .timeline import Timeline
+from .timeline import TimelineLike
 
 if TYPE_CHECKING:
     from .case import Case
@@ -38,7 +38,7 @@ def _html_facts_row(result: ScanResult | None) -> str:
 
 
 def render_text(
-    timeline: Timeline,
+    timeline: TimelineLike,
     findings: list[Finding],
     result: ScanResult | None = None,
 ) -> str:
@@ -109,7 +109,7 @@ def render_text(
 
 
 def render_json(
-    timeline: Timeline,
+    timeline: TimelineLike,
     findings: list[Finding],
     result: ScanResult | None = None,
     *,
@@ -240,7 +240,7 @@ def _csv_safe(value: str) -> str:
     return value
 
 
-def render_timeline_csv(timeline: Timeline) -> str:
+def render_timeline_csv(timeline: TimelineLike) -> str:
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(
@@ -262,7 +262,7 @@ def render_timeline_csv(timeline: Timeline) -> str:
 
 
 def render_html(
-    timeline: Timeline,
+    timeline: TimelineLike,
     findings: list[Finding],
     result: ScanResult | None = None,
 ) -> str:

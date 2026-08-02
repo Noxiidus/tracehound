@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from .models import Event, Finding, Severity
-from .timeline import Timeline
+from .timeline import TimelineLike
 
 if TYPE_CHECKING:
     from .core import ScanResult
@@ -108,7 +108,7 @@ def _extra_pairs(event: Event) -> str:
 
 
 def render_l2tcsv(
-    timeline: Timeline,
+    timeline: TimelineLike,
     findings: list[Finding],
     result: ScanResult | None = None,
 ) -> str:
@@ -151,7 +151,7 @@ def render_l2tcsv(
 
 
 def render_timesketch_jsonl(
-    timeline: Timeline,
+    timeline: TimelineLike,
     findings: list[Finding],
     result: ScanResult | None = None,
 ) -> str:

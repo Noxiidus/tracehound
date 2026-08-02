@@ -150,6 +150,15 @@ class TestCollectFiles:
 
 
 class TestCli:
+    def test_scan_sqlite_backend(
+        self, scenario: tuple[Path, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        db = tmp_path / "tl.db"
+        rc = main(["scan", *(str(p) for p in scenario), "--year", "2024", "--sqlite", str(db)])
+        assert rc == 0
+        assert db.exists() and db.stat().st_size > 0
+        assert "tracehound report" in capsys.readouterr().out
+
     def test_scan_text(
         self, scenario: tuple[Path, Path], capsys: pytest.CaptureFixture[str]
     ) -> None:

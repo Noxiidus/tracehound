@@ -15,7 +15,7 @@ from typing import ClassVar
 from ..config import Config
 from ..factbase import FactBase
 from ..models import Finding, Severity
-from ..timeline import Timeline
+from ..timeline import TimelineLike
 
 
 class Detection(ABC):
@@ -38,7 +38,7 @@ class Detection(ABC):
     attack_techniques: ClassVar[list[str]] = []
 
     @abstractmethod
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         """Yield findings for ``timeline``."""
 
 
@@ -73,7 +73,7 @@ def order_findings(findings: list[Finding]) -> list[Finding]:
 
 
 def run_all(
-    timeline: Timeline,
+    timeline: TimelineLike,
     config: Config | None = None,
     extra: list[Detection] | None = None,
 ) -> list[Finding]:

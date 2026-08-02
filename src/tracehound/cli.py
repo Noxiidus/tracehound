@@ -71,6 +71,16 @@ def build_parser() -> argparse.ArgumentParser:
         "subset of the spec is supported. Repeatable",
     )
     scan_cmd.add_argument(
+        "--sqlite",
+        nargs="?",
+        const=":memory:",
+        default=None,
+        metavar="PATH",
+        help="keep the timeline in a SQLite database instead of memory, for datasets too "
+        "large for RAM. Give a PATH to persist it, or pass the flag alone for an in-process "
+        "database. Findings are identical either way",
+    )
+    scan_cmd.add_argument(
         "--min-severity",
         choices=[s.value for s in _SEVERITY_ORDER],
         default="info",
@@ -291,7 +301,13 @@ def _cmd_scan(args: argparse.Namespace) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
 
-    result = scan(args.paths, year=args.year, config=config, extra_detections=extra)
+    result = scan(
+        args.paths,
+        year=args.year,
+        config=config,
+        extra_detections=extra,
+        on_disk=args.sqlite,
+    )
 
     threshold = Severity(args.min_severity).rank
     findings = [f for f in result.findings if f.severity.rank >= threshold]

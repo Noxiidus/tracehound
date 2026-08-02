@@ -8,6 +8,7 @@ input — that equivalence is what lets a detection run against either without k
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -137,3 +138,22 @@ class TestCrossBackendEquivalence:
             )
 
         assert snapshot(mem) == snapshot(sql)
+
+    def test_scan_findings_identical_on_disk(self, tmp_path: Path) -> None:
+        """The whole pipeline — parse, detect, report — must yield the same findings whether
+        the timeline is in memory or on disk."""
+        from synth import backdoor_state_scenario, brute_force_scenario
+        from tracehound import scan
+
+        brute_force_scenario(tmp_path, year=2024)
+        backdoor_state_scenario(tmp_path)
+        db = tmp_path / "timeline.db"
+
+        mem = scan([tmp_path], year=2024)
+        disk = scan([tmp_path], year=2024, on_disk=db)
+
+        assert db.exists() and db.stat().st_size > 0
+        assert type(disk.timeline).__name__ == "SqliteTimeline"
+        assert sorted((f.rule_id, f.title) for f in mem.findings) == sorted(
+            (f.rule_id, f.title) for f in disk.findings
+        )

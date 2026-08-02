@@ -24,7 +24,7 @@ from typing import ClassVar
 
 from ..config import Config
 from ..models import Event, EventType, Finding, Severity
-from ..timeline import Timeline
+from ..timeline import TimelineLike
 from .base import Detection, register
 
 #: A gap is only meaningful if the log was otherwise chatty enough for silence to stand out.
@@ -44,7 +44,7 @@ class LogGapDetection(Detection):
     )
     attack_techniques: ClassVar[list[str]] = ["T1070.002"]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         threshold = timedelta(minutes=config.gap_minutes)
 
         for source, events in _by_source(timeline).items():
@@ -102,7 +102,7 @@ class TruncatedRecordDetection(Detection):
     )
     attack_techniques: ClassVar[list[str]] = ["T1070.002"]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         # Surfaced by the parser during ingestion; see UtmpParser.
         for event in timeline.of_type(EventType.OTHER):
             if event.metadata.get("anomaly") != "truncated":
@@ -134,7 +134,7 @@ class ClearedHistoryDetection(Detection):
     )
     attack_techniques: ClassVar[list[str]] = ["T1070.003"]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         active: dict[str, Event] = {}
         for event in timeline.of_type(EventType.PRIVILEGE_ESCALATION):
             if event.user and not config.account_allowed(event.user):
@@ -172,7 +172,7 @@ class ClearedHistoryDetection(Detection):
             )
 
 
-def _by_source(timeline: Timeline) -> dict[str, list[Event]]:
+def _by_source(timeline: TimelineLike) -> dict[str, list[Event]]:
     grouped: dict[str, list[Event]] = {}
     for event in timeline:
         grouped.setdefault(event.source, []).append(event)

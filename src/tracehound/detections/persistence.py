@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from ..config import Config
 from ..models import EventType, Finding, Severity
-from ..timeline import Timeline
+from ..timeline import TimelineLike
 from .base import Detection, register
 
 # Commands worth surfacing when run through sudo. Each entry is (pattern, why, techniques).
@@ -41,7 +41,7 @@ class AccountCreationDetection(Detection):
     description: ClassVar[str] = "A local account was created — a common persistence mechanism."
     attack_techniques: ClassVar[list[str]] = ["T1136.001"]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         for event in timeline.of_type(EventType.ACCOUNT_CREATED):
             name = event.user or event.metadata.get("name") or "<unknown>"
             if config.account_allowed(str(name)):
@@ -69,7 +69,7 @@ class PrivilegedGroupDetection(Detection):
     description: ClassVar[str] = "A user was granted membership of an administrative group."
     attack_techniques: ClassVar[list[str]] = ["T1098", "T1548.003"]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         for event in timeline.of_type(EventType.GROUP_MEMBER_ADDED):
             group = str(event.metadata.get("group", ""))
             if not config.is_privileged_group(group) or config.account_allowed(event.user):
@@ -99,7 +99,7 @@ class BackdoorAccountDetection(Detection):
     )
     attack_techniques: ClassVar[list[str]] = ["T1136.001", "T1098"]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         created = {e.user: e for e in timeline.of_type(EventType.ACCOUNT_CREATED) if e.user}
         if not created:
             return
@@ -144,7 +144,7 @@ class SensitiveSudoDetection(Detection):
     description: ClassVar[str] = "A privileged command matching a known abuse pattern was executed."
     attack_techniques: ClassVar[list[str]] = ["T1548.003"]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         for event in timeline.of_type(EventType.PRIVILEGE_ESCALATION):
             command = str(event.metadata.get("command", ""))
             if not command or config.account_allowed(event.user):

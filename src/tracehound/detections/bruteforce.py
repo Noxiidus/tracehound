@@ -9,7 +9,7 @@ from typing import ClassVar
 
 from ..config import Config
 from ..models import Event, EventType, Finding, Severity
-from ..timeline import Timeline
+from ..timeline import TimelineLike
 from .base import Detection, register
 
 FAILURE_TYPES = (EventType.LOGIN_FAILURE, EventType.INVALID_USER)
@@ -53,7 +53,7 @@ class BruteForceDetection(Detection):
     )
     attack_techniques: ClassVar[list[str]] = ["T1110", "T1110.001"]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         window = timedelta(seconds=config.brute_force_window)
         failures = timeline.of_type(*FAILURE_TYPES)
 
@@ -98,7 +98,7 @@ class SuccessfulBruteForceDetection(Detection):
     )
     attack_techniques: ClassVar[list[str]] = ["T1110", "T1078"]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         failures = _group_by_ip(timeline.of_type(*FAILURE_TYPES), config)
         successes = _group_by_ip(timeline.of_type(EventType.LOGIN_SUCCESS), config)
 
@@ -142,7 +142,7 @@ class PasswordSprayDetection(Detection):
     description: ClassVar[str] = "One source tried many distinct usernames with few attempts each."
     attack_techniques: ClassVar[list[str]] = ["T1110.003"]
 
-    def run(self, timeline: Timeline, config: Config) -> Iterator[Finding]:
+    def run(self, timeline: TimelineLike, config: Config) -> Iterator[Finding]:
         grouped = _group_by_ip(timeline.of_type(*FAILURE_TYPES), config)
         for ip, events in sorted(grouped.items()):
             users = {e.user for e in events if e.user}
