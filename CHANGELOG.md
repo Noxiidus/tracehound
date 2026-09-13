@@ -7,6 +7,25 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.3] — 2026-09-13
+
+Throughput benchmarks — the last piece of *Scale*, so a performance regression is caught in
+CI rather than discovered on a real host.
+
+### Added
+
+- **`benchmarks/bench.py`** — generates a synthetic `auth.log` of N credential-attack lines
+  and times a full scan (parse, timeline, detections) against both the in-memory and SQLite
+  backends, printing events/second. A profiling aid: `python benchmarks/bench.py [N]`.
+- **A CI regression guard** (`tests/test_benchmarks.py`) — scans 20k events on both backends
+  inside a generous ceiling (~100× local runtime) and asserts the two agree at scale. It is
+  a catastrophe detector for an accidental O(n²) or a per-event commit, not a micro-benchmark
+  (shared CI runners make wall-clock noisy). `benchmarks/` is now linted in CI too.
+
+With this, every *Scale* item on the roadmap is delivered: streaming, the on-disk SQLite
+timeline, incremental scanning, and benchmarks. Next is 1.0 — an API-freeze / promise
+release, not a feature one.
+
 ## [0.9.2] — 2026-09-13
 
 Incremental scanning — the next piece of *Scale*, for repeated runs against a live host.

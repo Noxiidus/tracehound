@@ -84,9 +84,11 @@ scan (size, mtime, digest) is not re-parsed, a changed one is dropped and re-par
 result matches a full scan. A grown file is re-parsed in full for now; byte-offset resumption
 is a later refinement.
 
-**Still to come in a 0.9.x follow-up:**
+**Benchmarks in CI — shipped in [0.9.3](CHANGELOG.md).** `benchmarks/bench.py` reports
+events/second for both backends, and a CI guard scans 20k events inside a generous ceiling so
+an accidental O(n²) is caught rather than discovered on a real host.
 
-- **Benchmarks in CI**, so a regression in throughput is caught rather than discovered.
+Every *Scale* item is now delivered.
 
 **Why Scale is last before 1.0.** Optimising before the model is settled means optimising
 the wrong thing twice — which is why the backend was made pluggable only after the event,
