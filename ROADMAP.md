@@ -96,18 +96,21 @@ fact, interop and Sigma models had settled.
 
 ---
 
-## 1.0.0 — Commitments
+## 1.0.0 — Commitments — **shipped**
 
-Not a feature release. A promise release.
+Not a feature release. A promise release. Delivered in [1.0.0](CHANGELOG.md):
 
-- **Public API freeze** for `scan()`, `build_case()`, `Event`, `Finding`, `Timeline`,
-  `Config` and the parser/detection interfaces. Breaking changes only on a major version.
-- **Rule ID policy** — IDs are permanent. A retired rule is marked deprecated, never
-  reused, so a finding in an old report can always be looked up.
-- **Documented compatibility** for manifest and report JSON schemas, so downstream tooling
-  can rely on them.
-- **PyPI publication**, making `pip install tracehound` work without a git URL.
-- **Security policy** and a documented process for reporting issues in the tool itself.
+- **Public API freeze** — [docs/api.md](docs/api.md) declares the stable surface under
+  SemVer; breaking changes only on a major version. Errors on bad input are contractually a
+  typed `RuleError` / `SigmaError` / `ConfigError` / `ManifestError`.
+- **Rule ID policy** — `THN-NNNN` ids are permanent and never reused; enforced by a test.
+- **Documented schemas** — [docs/schemas.md](docs/schemas.md) covers the report JSON, the
+  manifest, and the l2tcsv / Timesketch / Sigma exports.
+- **Security policy** — [SECURITY.md](SECURITY.md): private reporting, scope, design stance.
+- **PyPI packaging** — clean sdist/wheel (`twine check` passes) and a Trusted-Publishing
+  (OIDC) `publish.yml` that uploads on a version tag. **One-time step to go live:** configure
+  a PyPI trusted publisher for `tracehound` → repo `Noxiidus/tracehound`, workflow
+  `publish.yml`, environment `pypi`; then `pip install tracehound` works.
 
 A 1.0 that cannot be depended on is just a version number.
 

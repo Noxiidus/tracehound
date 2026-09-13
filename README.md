@@ -3,6 +3,7 @@
 **Linux DFIR triage — parse host artifacts into a unified timeline and surface attacker behaviour.**
 
 [![CI](https://github.com/Noxiidus/tracehound/actions/workflows/ci.yml/badge.svg)](https://github.com/Noxiidus/tracehound/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/tracehound)](https://pypi.org/project/tracehound/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-orange)](CHANGELOG.md)
@@ -49,14 +50,18 @@ tracehound does that correlation mechanically, in UTC, every time.
 Requires Python 3.10 or newer. No third-party runtime dependencies.
 
 ```bash
-pip install git+https://github.com/Noxiidus/tracehound.git
+pip install tracehound
 ```
 
-Pin a specific version if you want reproducibility:
+Or install straight from git — pin a tag for reproducibility:
 
 ```bash
-pip install git+https://github.com/Noxiidus/tracehound.git@v0.2.0
+pip install git+https://github.com/Noxiidus/tracehound.git@v1.0.0
 ```
+
+From 1.0 the public API and output formats follow [Semantic Versioning](https://semver.org/)
+— see [docs/api.md](docs/api.md) for the stable surface and [docs/schemas.md](docs/schemas.md)
+for the JSON/report formats.
 
 For development, clone and install in editable mode with the test extras:
 

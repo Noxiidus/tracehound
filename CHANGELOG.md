@@ -7,6 +7,37 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.0] — 2026-09-13
+
+Not a feature release — a promise release. tracehound has had the model settled since the
+Fact work and the pipeline exercised hard by repeated fuzzing and security reviews; 1.0
+commits to it.
+
+### Added
+
+- **A documented, frozen public API** ([docs/api.md](docs/api.md)) — `scan`, `build_case`,
+  `Event`, `Fact`, `Finding`, `Timeline`/`TimelineLike`, `FactBase`, `Config`, `ScanResult`,
+  the parser/detection interfaces and the export functions, under Semantic Versioning:
+  incompatible changes only on a major bump. Errors on bad input are part of the contract —
+  always a typed `RuleError` / `SigmaError` / `ConfigError` / `ManifestError`.
+- **A rule-id policy** — `THN-NNNN` ids are permanent and never reused; a retired rule is
+  deprecated, not recycled, so a finding in an archived report can always be looked up. A
+  test enforces uniqueness and the id scheme across every built-in rule.
+- **Documented output schemas** ([docs/schemas.md](docs/schemas.md)) — the report JSON, the
+  collection `manifest.json`, and the l2tcsv / Timesketch / Sigma exports, so downstream
+  tooling can rely on them. Fields are added, never removed or repurposed, within a major.
+- **A security policy** ([SECURITY.md](SECURITY.md)) — private reporting via GitHub Security
+  Advisories, the scope (a crash/hang/injection on crafted input is a security bug), and the
+  read-only, never-execute design stance.
+- **PyPI packaging** — the project builds a clean sdist and wheel (`twine check` passes) and
+  ships a `publish.yml` workflow that publishes on a version tag via PyPI Trusted Publishing
+  (OIDC, no stored token). One-time PyPI trusted-publisher setup enables `pip install
+  tracehound`.
+
+### Changed
+
+- Development status classifier is now **Production/Stable**.
+
 ## [0.9.3] — 2026-09-13
 
 Throughput benchmarks — the last piece of *Scale*, so a performance regression is caught in

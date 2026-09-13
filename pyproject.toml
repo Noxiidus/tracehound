@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tracehound"
-version = "0.9.3"
+version = "1.0.0"
 description = "Linux DFIR triage — parse host artifacts into a unified timeline and surface attacker behaviour"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "Katona Balazs", email = "ankara.herho@gmail.com" }]
 keywords = ["dfir", "forensics", "incident-response", "linux", "timeline", "security"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Information Technology",
     "License :: OSI Approved :: MIT License",
@@ -35,6 +35,8 @@ dev = [
     "ruff>=0.5",
     "pyyaml>=6.0",
     "types-PyYAML",
+    "build>=1.0",
+    "twine>=5.0",
 ]
 
 [project.scripts]
@@ -42,7 +44,9 @@ tracehound = "tracehound.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Noxiidus/tracehound"
+Documentation = "https://github.com/Noxiidus/tracehound/wiki"
 Issues = "https://github.com/Noxiidus/tracehound/issues"
+Changelog = "https://github.com/Noxiidus/tracehound/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tracehound"]
