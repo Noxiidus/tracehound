@@ -272,6 +272,24 @@ class TestIncrementalScan:
             (f.rule_id, f.title) for f in full.findings
         )
 
+    def test_deleted_file_is_pruned_from_the_timeline(self, tmp_path: Path) -> None:
+        """A file that was an event source last run but is gone now must have its events
+        pruned, so an incremental scan equals a full scan of the current evidence."""
+        from synth import brute_force_scenario
+        from tracehound import scan
+
+        evidence = tmp_path / "evidence"
+        evidence.mkdir()
+        brute_force_scenario(evidence, year=2024)  # auth.log + wtmp
+        db = tmp_path / "tl.db"
+        scan([evidence], year=2024, on_disk=db, incremental=True)
+
+        (evidence / "wtmp").unlink()  # delete one event source
+        incr = scan([evidence], year=2024, on_disk=db, incremental=True)
+        full = scan([evidence], year=2024)
+        assert len(incr.timeline) == len(full.timeline)
+        assert not any(e.source == "wtmp" for e in incr.timeline)
+
     def test_backend_bookkeeping(self, tmp_path: Path) -> None:
         db = tmp_path / "b.db"
         tl = SqliteTimeline(db, reset=False)

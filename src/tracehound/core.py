@@ -169,6 +169,7 @@ def scan(
         timeline = Timeline()
     factbase = FactBase()
     result = ScanResult(timeline=timeline, findings=[], factbase=factbase)
+    seen_event_keys: set[str] = set()  # event files present this incremental run
 
     for file_path in collect_files(paths):
         try:
@@ -203,6 +204,7 @@ def scan(
                 record.parser = parser.name
                 record.event_count = sqlite_tl.reused_count(key)
                 record.reused = True
+                seen_event_keys.add(key)
                 result.artifacts.append(record)
                 continue
             sqlite_tl.forget(key)
@@ -218,6 +220,7 @@ def scan(
             if sqlite_tl is not None and incremental:
                 record.event_count = sqlite_tl.add(events, source_path=key)
                 sqlite_tl.record_ingested(key, size, stat.st_mtime, digest, record.event_count)
+                seen_event_keys.add(key)
             else:
                 record.event_count = timeline.add(events)
             result.artifacts.append(record)
@@ -239,6 +242,13 @@ def scan(
 
         record.skipped_reason = "no parser matched"
         result.artifacts.append(record)
+
+    if sqlite_tl is not None and incremental:
+        # Drop events for files that were event sources last time but are gone now, so the
+        # timeline reflects the current evidence — an incremental scan equals a full one.
+        for gone in sqlite_tl.ingested_paths():
+            if gone not in seen_event_keys:
+                sqlite_tl.forget(gone)
 
     timeline.sort()
     factbase.sort()

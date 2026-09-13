@@ -185,6 +185,10 @@ class SqliteTimeline:
         self._conn.execute("DELETE FROM ingested WHERE path = ?", (source_path,))
         self._conn.commit()
 
+    def ingested_paths(self) -> list[str]:
+        """Every file path recorded by a previous incremental ingest."""
+        return [str(row[0]) for row in self._conn.execute("SELECT path FROM ingested")]
+
     def record_ingested(
         self, path: str, size: int, mtime: float, sha256: str, event_count: int
     ) -> None:

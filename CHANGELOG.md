@@ -7,6 +7,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.2] — 2026-09-13
+
+### Fixed
+
+- **Incremental scan kept events for deleted files.** A file that was an event source on a
+  previous run but is gone on this one had its events left in the database, so an incremental
+  scan no longer matched a full scan of the current evidence — contradicting the guarantee
+  made for the feature. Events for files not seen this run are now pruned, so an incremental
+  scan equals a full scan even across deletions and rotations. Completes the incremental
+  correctness pass started in 1.0.1.
+
 ## [1.0.1] — 2026-09-13
 
 ### Fixed
