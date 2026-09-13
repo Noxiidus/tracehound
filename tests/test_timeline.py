@@ -251,6 +251,27 @@ class TestIncrementalScan:
             (f.rule_id, f.title) for f in full.findings
         )
 
+    def test_changed_file_no_longer_an_event_source_is_not_orphaned(self, tmp_path: Path) -> None:
+        """If an event file becomes unparseable (or a different kind of artifact) between
+        incremental runs, its old events must be dropped, not left orphaned in the DB."""
+        from synth import brute_force_scenario
+        from tracehound import scan
+
+        evidence = tmp_path / "evidence"
+        evidence.mkdir()
+        brute_force_scenario(evidence, year=2024)
+        db = tmp_path / "tl.db"
+        scan([evidence], year=2024, on_disk=db, incremental=True)
+
+        # auth.log is replaced with content no parser recognises.
+        (evidence / "auth.log").write_text("!!! not a log anymore !!!\njunk\n", encoding="utf-8")
+        incr = scan([evidence], year=2024, on_disk=db, incremental=True)
+        full = scan([evidence], year=2024)
+        assert len(incr.timeline) == len(full.timeline)  # no orphaned auth.log events
+        assert sorted((f.rule_id, f.title) for f in incr.findings) == sorted(
+            (f.rule_id, f.title) for f in full.findings
+        )
+
     def test_backend_bookkeeping(self, tmp_path: Path) -> None:
         db = tmp_path / "b.db"
         tl = SqliteTimeline(db, reset=False)

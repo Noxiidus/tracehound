@@ -7,6 +7,18 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.1] — 2026-09-13
+
+### Fixed
+
+- **Incremental scan left orphaned events when a file stopped being an event source.** The
+  stale-event cleanup only ran inside the event-parser branch, so if a log file became
+  unparseable or turned into a different kind of artifact between incremental runs, its
+  previous events lingered in the database and inflated the timeline (and findings). The
+  cleanup now runs for any readable file that is not being reused — changed, no longer an
+  event source, or no longer parseable — so an incremental scan always matches a full scan
+  of the current evidence. Found in the post-1.0 bug-hunt.
+
 ## [1.0.0] — 2026-09-13
 
 Not a feature release — a promise release. tracehound has had the model settled since the

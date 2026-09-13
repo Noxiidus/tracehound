@@ -192,19 +192,22 @@ def scan(
         # the state parsers. The two never overlap — a state artifact is not valid syslog —
         # so order is a small optimisation, not a correctness question.
         parser = parser_for(file_path)
-        if parser is not None:
-            key = str(file_path)
-            if (
-                sqlite_tl is not None
-                and incremental
-                and sqlite_tl.unchanged(key, size, stat.st_mtime, digest)
-            ):
-                # Unchanged since the last scan — its events are already in the database.
+        key = str(file_path)
+
+        # Incremental: reuse an unchanged event file, otherwise drop whatever it contributed
+        # last time before re-handling it. The forget must run whether the file changed, is
+        # no longer an event source, or is no longer parseable at all — otherwise its old
+        # events would be orphaned in the database and inflate the timeline.
+        if sqlite_tl is not None and incremental:
+            if parser is not None and sqlite_tl.unchanged(key, size, stat.st_mtime, digest):
                 record.parser = parser.name
                 record.event_count = sqlite_tl.reused_count(key)
                 record.reused = True
                 result.artifacts.append(record)
                 continue
+            sqlite_tl.forget(key)
+
+        if parser is not None:
             try:
                 events = list(parser.parse(file_path, ctx))
             except (OSError, ValueError) as exc:
@@ -213,7 +216,6 @@ def scan(
                 continue
             record.parser = parser.name
             if sqlite_tl is not None and incremental:
-                sqlite_tl.forget(key)  # drop a changed file's stale events before re-adding
                 record.event_count = sqlite_tl.add(events, source_path=key)
                 sqlite_tl.record_ingested(key, size, stat.st_mtime, digest, record.event_count)
             else:
