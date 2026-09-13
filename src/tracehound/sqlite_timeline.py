@@ -25,7 +25,9 @@ from typing import Any
 from .models import Event, EventType
 
 _COLUMNS = "ts, source, event_type, message, user, source_ip, process, pid, terminal, raw, metadata"
-_INSERT = f"INSERT INTO events ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+# INSERT also stamps source_path (the originating file), used only for incremental scans to
+# replace a changed file's events; it is never read back into an Event.
+_INSERT = f"INSERT INTO events ({_COLUMNS}, source_path) VALUES ({', '.join(['?'] * 11)}, ?)"
 _ORDER = "ORDER BY ts, source, message"
 _BATCH = 1000
 
@@ -99,7 +101,21 @@ class SqliteTimeline:
                 pid        INTEGER,
                 terminal   TEXT,
                 raw        TEXT NOT NULL,
-                metadata   TEXT NOT NULL
+                metadata   TEXT NOT NULL,
+                source_path TEXT
+            )
+            """
+        )
+        # Per-file fingerprints from the last scan, so an incremental run can skip a file
+        # whose bytes are unchanged and reuse the events already stored for it.
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ingested (
+                path        TEXT PRIMARY KEY,
+                size        INTEGER NOT NULL,
+                mtime       REAL NOT NULL,
+                sha256      TEXT NOT NULL,
+                event_count INTEGER NOT NULL
             )
             """
         )
@@ -107,8 +123,10 @@ class SqliteTimeline:
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_ip ON events(source_ip)")
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_user ON events(user)")
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_type ON events(event_type)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_path ON events(source_path)")
         if reset:
             self._conn.execute("DELETE FROM events")
+            self._conn.execute("DELETE FROM ingested")
         self._conn.commit()
 
     def close(self) -> None:
@@ -124,12 +142,17 @@ class SqliteTimeline:
         for row in cursor:
             yield _to_event(row)
 
-    def add(self, events: Iterable[Event]) -> int:
-        """Insert ``events`` (a possibly-lazy iterator) in batches; return how many landed."""
+    def add(self, events: Iterable[Event], source_path: str | None = None) -> int:
+        """Insert ``events`` (a possibly-lazy iterator) in batches; return how many landed.
+
+        ``source_path`` tags the rows with the file they came from, so an incremental scan
+        can later :meth:`forget` and re-ingest just that file. It is bookkeeping only — it
+        never surfaces on the reconstructed :class:`Event`.
+        """
         count = 0
-        batch: list[tuple[object, ...]] = []
+        batch: list[tuple[Any, ...]] = []
         for event in events:
-            batch.append(_to_row(event))
+            batch.append((*_to_row(event), source_path))
             if len(batch) >= _BATCH:
                 self._conn.executemany(_INSERT, batch)
                 count += len(batch)
@@ -139,6 +162,39 @@ class SqliteTimeline:
             count += len(batch)
         self._conn.commit()
         return count
+
+    # --- incremental-scan bookkeeping -----------------------------------------------
+
+    def unchanged(self, path: str, size: int, mtime: float, sha256: str) -> bool:
+        """True if ``path`` was ingested before with the same size, mtime and digest."""
+        row = self._conn.execute(
+            "SELECT size, mtime, sha256 FROM ingested WHERE path = ?", (path,)
+        ).fetchone()
+        return row is not None and row[0] == size and row[1] == mtime and row[2] == sha256
+
+    def reused_count(self, path: str) -> int:
+        """How many events a previously-ingested ``path`` contributed (0 if unknown)."""
+        row = self._conn.execute(
+            "SELECT event_count FROM ingested WHERE path = ?", (path,)
+        ).fetchone()
+        return int(row[0]) if row is not None else 0
+
+    def forget(self, source_path: str) -> None:
+        """Drop every event previously ingested from ``source_path`` (a changed file)."""
+        self._conn.execute("DELETE FROM events WHERE source_path = ?", (source_path,))
+        self._conn.execute("DELETE FROM ingested WHERE path = ?", (source_path,))
+        self._conn.commit()
+
+    def record_ingested(
+        self, path: str, size: int, mtime: float, sha256: str, event_count: int
+    ) -> None:
+        """Remember ``path``'s fingerprint and event count for the next incremental run."""
+        self._conn.execute(
+            "INSERT OR REPLACE INTO ingested (path, size, mtime, sha256, event_count) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (path, size, mtime, sha256, event_count),
+        )
+        self._conn.commit()
 
     def sort(self) -> None:
         """A no-op: order is enforced on every read by ``ORDER BY ts, source, message``."""

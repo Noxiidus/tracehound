@@ -159,6 +159,31 @@ class TestCli:
         assert db.exists() and db.stat().st_size > 0
         assert "tracehound report" in capsys.readouterr().out
 
+    def test_incremental_requires_sqlite_path(
+        self, scenario: tuple[Path, Path], capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        rc = main(["scan", *(str(p) for p in scenario), "--year", "2024", "--incremental"])
+        assert rc == 2
+        assert "incremental" in capsys.readouterr().err.lower()
+
+    def test_incremental_second_run_reuses(
+        self, scenario: tuple[Path, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        db = tmp_path / "tl.db"
+        argv = [
+            "scan",
+            *(str(p) for p in scenario),
+            "--year",
+            "2024",
+            "--sqlite",
+            str(db),
+            "--incremental",
+        ]
+        assert main(argv) == 0
+        capsys.readouterr()
+        assert main(argv) == 0  # second run reuses the unchanged files without error
+        assert "tracehound report" in capsys.readouterr().out
+
     def test_scan_text(
         self, scenario: tuple[Path, Path], capsys: pytest.CaptureFixture[str]
     ) -> None:

@@ -69,9 +69,11 @@ def render_text(
                 if record.fact_count
                 else f"{record.event_count} events"
             )
+            reused = " (reused)" if record.reused else ""
             out.write(f"  {record.path}\n")
             out.write(
-                f"      sha256={record.sha256 or '—'}  {record.size} bytes  [{status}, {yielded}]\n"
+                f"      sha256={record.sha256 or '—'}  {record.size} bytes  "
+                f"[{status}, {yielded}{reused}]\n"
             )
     out.write("\n")
 

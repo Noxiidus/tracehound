@@ -88,6 +88,9 @@ tracehound scan /var/log --min-severity high --fail-on-findings
 # auth.log from a busy host. Findings are identical to the in-memory run.
 tracehound scan /evidence --sqlite timeline.db
 
+# Re-scan a live host: files unchanged since last time are not re-parsed.
+tracehound scan /var/log --sqlite timeline.db --incremental
+
 tracehound parsers   # what it can read
 tracehound rules     # what it looks for
 ```

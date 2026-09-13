@@ -78,10 +78,14 @@ keeps the timeline in SQLite for datasets too large for RAM; because events stor
 ISO-8601 UTC timestamp that sorts lexically in chronological order, both backends produce
 byte-identical findings. Inserts stream in batches; `add()` accepts a lazy iterator.
 
+**Incremental scanning — shipped in [0.9.2](CHANGELOG.md).** `scan --sqlite PATH
+--incremental` reuses the database across runs: an event-log file unchanged since the last
+scan (size, mtime, digest) is not re-parsed, a changed one is dropped and re-parsed, and the
+result matches a full scan. A grown file is re-parsed in full for now; byte-offset resumption
+is a later refinement.
+
 **Still to come in a 0.9.x follow-up:**
 
-- **Incremental scanning** — remember where a previous scan stopped and process only what
-  is new, for repeated runs against a live host.
 - **Benchmarks in CI**, so a regression in throughput is caught rather than discovered.
 
 **Why Scale is last before 1.0.** Optimising before the model is settled means optimising

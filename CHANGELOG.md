@@ -7,6 +7,31 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.2] — 2026-09-13
+
+Incremental scanning — the next piece of *Scale*, for repeated runs against a live host.
+
+### Added
+
+- **`scan(..., incremental=True)`** and **`tracehound scan --sqlite PATH --incremental`** —
+  reuse a persistent SQLite database across runs. An event-log file whose size, mtime and
+  SHA-256 are unchanged since the last scan is not re-parsed; its events are already stored.
+  A changed file has its old events dropped and is parsed afresh, so the result always
+  matches a full scan of the current evidence. State artifacts (`/etc/passwd` and friends)
+  are always re-read — they are tiny and the fact base is not persisted, so skipping them
+  would leave fact detections blind.
+- `SqliteTimeline` now tags stored events with their source file and keeps a per-file
+  fingerprint table (`unchanged` / `forget` / `record_ingested` / `reused_count`), the
+  bookkeeping incremental scanning is built on. `add()` takes an optional `source_path`.
+- The text report and JSON provenance mark a reused file, so it is clear what was skipped.
+
+### Notes
+
+Incremental requires an on-disk `--sqlite` path (it has nothing to persist otherwise) and
+errors clearly without one. A file that *grew* is re-parsed in full; byte-offset resumption
+that reads only the appended tail is a later refinement. This leaves CI throughput
+benchmarks as the last open *Scale* item before 1.0.
+
 ## [0.9.1] — 2026-09-13
 
 Fixes to the 0.9.0 on-disk timeline, found in a review of the new SQLite backend.

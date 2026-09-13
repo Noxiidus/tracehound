@@ -188,3 +188,79 @@ class TestCrossBackendEquivalence:
         second = scan([tmp_path], year=2024, on_disk=db)
         assert len(second.timeline) == len(first.timeline)
         assert len(second.findings) == len(first.findings)
+
+
+class TestIncrementalScan:
+    def test_requires_on_disk(self, tmp_path: Path) -> None:
+        from tracehound import scan
+
+        with pytest.raises(ValueError, match="incremental scanning requires"):
+            scan([tmp_path], year=2024, incremental=True)
+
+    def test_unchanged_files_are_reused_not_reparsed(self, tmp_path: Path) -> None:
+        from synth import brute_force_scenario
+        from tracehound import scan
+
+        brute_force_scenario(tmp_path, year=2024)
+        db = tmp_path / "tl.db"
+
+        first = scan([tmp_path], year=2024, on_disk=db, incremental=True)
+        assert not any(a.reused for a in first.artifacts)  # nothing to reuse on the first run
+
+        second = scan([tmp_path], year=2024, on_disk=db, incremental=True)
+        reused = [a for a in second.artifacts if a.reused]
+        assert reused, "expected unchanged event files to be reused"
+        # Reused files keep their event count and the timeline does not grow or double.
+        assert len(second.timeline) == len(first.timeline)
+        assert sorted(f.rule_id for f in second.findings) == sorted(
+            f.rule_id for f in first.findings
+        )
+
+    def test_changed_file_is_reparsed_and_matches_a_full_scan(self, tmp_path: Path) -> None:
+        from datetime import datetime, timezone
+
+        from synth import brute_force_scenario, syslog_line
+        from tracehound import scan
+
+        brute_force_scenario(tmp_path, year=2024)
+        db = tmp_path / "tl.db"
+        scan([tmp_path], year=2024, on_disk=db, incremental=True)
+
+        # Append a fresh brute-force burst to auth.log, then re-scan incrementally.
+        auth = tmp_path / "auth.log"
+        base = datetime(2024, 3, 6, 7, 0, 0, tzinfo=timezone.utc)
+        with auth.open("a", encoding="utf-8") as fh:
+            for i in range(15):
+                fh.write(
+                    syslog_line(
+                        base,
+                        "sshd",
+                        f"Failed password for invalid user bob from 9.9.9.9 port {i} ssh2",
+                        pid=5000 + i,
+                    )
+                    + "\n"
+                )
+
+        incr = scan([tmp_path], year=2024, on_disk=db, incremental=True)
+        auth_record = next(a for a in incr.artifacts if a.path.name == "auth.log")
+        assert auth_record.reused is False  # the grown file was re-parsed
+
+        # The incremental result must match a fresh full scan of the current evidence.
+        full = scan([tmp_path], year=2024)
+        assert sorted((f.rule_id, f.title) for f in incr.findings) == sorted(
+            (f.rule_id, f.title) for f in full.findings
+        )
+
+    def test_backend_bookkeeping(self, tmp_path: Path) -> None:
+        db = tmp_path / "b.db"
+        tl = SqliteTimeline(db, reset=False)
+        tl.add([_ev(0), _ev(1)], source_path="/x/auth.log")
+        tl.record_ingested("/x/auth.log", size=100, mtime=123.0, sha256="abc", event_count=2)
+
+        assert tl.unchanged("/x/auth.log", 100, 123.0, "abc")
+        assert not tl.unchanged("/x/auth.log", 200, 123.0, "abc")  # size differs
+        assert tl.reused_count("/x/auth.log") == 2
+
+        tl.forget("/x/auth.log")
+        assert len(tl) == 0
+        assert not tl.unchanged("/x/auth.log", 100, 123.0, "abc")

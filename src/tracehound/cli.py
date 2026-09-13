@@ -81,6 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
         "database. Findings are identical either way",
     )
     scan_cmd.add_argument(
+        "--incremental",
+        action="store_true",
+        help="reuse a persistent --sqlite database across runs: event-log files unchanged "
+        "since the last scan are not re-parsed. Requires --sqlite with a path",
+    )
+    scan_cmd.add_argument(
         "--min-severity",
         choices=[s.value for s in _SEVERITY_ORDER],
         default="info",
@@ -278,6 +284,13 @@ def _cmd_scan(args: argparse.Namespace) -> int:
             print(f"error: no such file or directory: {path}", file=sys.stderr)
         return 2
 
+    if args.incremental and (not args.sqlite or args.sqlite == ":memory:"):
+        print(
+            "error: --incremental needs --sqlite with a path to persist across runs",
+            file=sys.stderr,
+        )
+        return 2
+
     config = Config()
     if args.config:
         try:
@@ -307,6 +320,7 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         config=config,
         extra_detections=extra,
         on_disk=args.sqlite,
+        incremental=args.incremental,
     )
 
     threshold = Severity(args.min_severity).rank

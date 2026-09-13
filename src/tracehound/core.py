@@ -46,6 +46,9 @@ class ArtifactRecord:
     event_count: int = 0
     fact_count: int = 0
     skipped_reason: str | None = None
+    #: True when an incremental scan reused a prior run's events for this unchanged file
+    #: instead of re-parsing it.
+    reused: bool = False
 
     @property
     def parsed(self) -> bool:
@@ -60,6 +63,7 @@ class ArtifactRecord:
             "event_count": self.event_count,
             "fact_count": self.fact_count,
             "skipped_reason": self.skipped_reason,
+            "reused": self.reused,
         }
 
 
@@ -131,6 +135,7 @@ def scan(
     config: Config | None = None,
     extra_detections: list[Detection] | None = None,
     on_disk: str | Path | None = None,
+    incremental: bool = False,
 ) -> ScanResult:
     """Parse every recognised artifact under ``paths`` and run all detections.
 
@@ -142,15 +147,33 @@ def scan(
     ``on_disk`` keeps the timeline in a SQLite database instead of memory: pass a path to
     persist it, or ``":memory:"`` for an in-process database that still holds no ``Event``
     objects. Detections behave identically either way — only where the events live changes.
+
+    ``incremental`` (requires an on-disk ``on_disk`` path) reuses that database across runs:
+    an event-log file whose size, mtime and digest are unchanged since the last scan is not
+    re-parsed — its events are already stored — while a changed file has its old events
+    dropped and is parsed afresh. State artifacts (``/etc/passwd`` and friends) are always
+    re-read: they are tiny and the fact base is not persisted, so skipping them would leave
+    fact detections blind. A file that grew is re-parsed in full; byte-offset resumption is
+    a later refinement.
     """
+    if incremental and on_disk is None:
+        raise ValueError("incremental scanning requires an on_disk database path")
+
     ctx = ParseContext(default_year=year)
-    timeline: TimelineLike = SqliteTimeline(on_disk) if on_disk is not None else Timeline()
+    sqlite_tl: SqliteTimeline | None = None
+    timeline: TimelineLike
+    if on_disk is not None:
+        sqlite_tl = SqliteTimeline(on_disk, reset=not incremental)
+        timeline = sqlite_tl
+    else:
+        timeline = Timeline()
     factbase = FactBase()
     result = ScanResult(timeline=timeline, findings=[], factbase=factbase)
 
     for file_path in collect_files(paths):
         try:
-            size = file_path.stat().st_size
+            stat = file_path.stat()
+            size = stat.st_size
             digest = sha256_file(file_path)
         except OSError as exc:
             result.artifacts.append(
@@ -170,6 +193,18 @@ def scan(
         # so order is a small optimisation, not a correctness question.
         parser = parser_for(file_path)
         if parser is not None:
+            key = str(file_path)
+            if (
+                sqlite_tl is not None
+                and incremental
+                and sqlite_tl.unchanged(key, size, stat.st_mtime, digest)
+            ):
+                # Unchanged since the last scan — its events are already in the database.
+                record.parser = parser.name
+                record.event_count = sqlite_tl.reused_count(key)
+                record.reused = True
+                result.artifacts.append(record)
+                continue
             try:
                 events = list(parser.parse(file_path, ctx))
             except (OSError, ValueError) as exc:
@@ -177,7 +212,12 @@ def scan(
                 result.artifacts.append(record)
                 continue
             record.parser = parser.name
-            record.event_count = timeline.add(events)
+            if sqlite_tl is not None and incremental:
+                sqlite_tl.forget(key)  # drop a changed file's stale events before re-adding
+                record.event_count = sqlite_tl.add(events, source_path=key)
+                sqlite_tl.record_ingested(key, size, stat.st_mtime, digest, record.event_count)
+            else:
+                record.event_count = timeline.add(events)
             result.artifacts.append(record)
             continue
 
