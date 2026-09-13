@@ -42,7 +42,11 @@ def _to_row(event: Event) -> tuple[Any, ...]:
         event.pid,
         event.terminal,
         event.raw,
-        json.dumps(event.metadata),
+        # default=str keeps a value the standard JSON types cannot hold (bytes, a set, an
+        # arbitrary object) from crashing the whole scan — it is stringified rather than
+        # aborting. Every built-in parser emits only JSON-native metadata, which round-trips
+        # exactly; this only bites library-constructed events with exotic metadata.
+        json.dumps(event.metadata, default=str),
     )
 
 
@@ -71,7 +75,15 @@ class SqliteTimeline:
     materialised.
     """
 
-    def __init__(self, path: str | Path = ":memory:") -> None:
+    def __init__(self, path: str | Path = ":memory:", *, reset: bool = True) -> None:
+        """Open (or create) the database at ``path``.
+
+        ``reset`` (the default) empties any existing events so a freshly constructed
+        timeline starts empty, exactly like ``Timeline()`` — a scan spilling to a
+        pre-existing ``--sqlite`` file represents *this* scan, not this scan plus the last
+        one. Pass ``reset=False`` to keep what is already stored (the seam a future
+        incremental-scan mode will resume from).
+        """
         self._conn = sqlite3.connect(str(path))
         self._conn.execute(
             """
@@ -95,6 +107,8 @@ class SqliteTimeline:
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_ip ON events(source_ip)")
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_user ON events(user)")
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_type ON events(event_type)")
+        if reset:
+            self._conn.execute("DELETE FROM events")
         self._conn.commit()
 
     def close(self) -> None:

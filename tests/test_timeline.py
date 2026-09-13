@@ -105,6 +105,24 @@ class TestSqliteFidelity:
         (e,) = list(tl)
         assert e.user is None and e.source_ip is None and e.pid is None
 
+    def test_exotic_metadata_does_not_crash(self) -> None:
+        """Metadata JSON can't hold bytes or a set; the backend must degrade to a string,
+        not abort the whole scan (every built-in parser emits only JSON-native metadata)."""
+        tl = SqliteTimeline()
+        tl.add([_ev(0, metadata={"blob": b"\x00raw", "seen": {1, 2}, "n": 5})])
+        (e,) = list(tl)
+        assert e.metadata["n"] == 5  # JSON-native value round-trips exactly
+        assert isinstance(e.metadata["blob"], str)  # bytes stringified, no crash
+
+    def test_reset_clears_existing_rows_by_default(self, tmp_path: Path) -> None:
+        db = tmp_path / "t.db"
+        first = SqliteTimeline(db)
+        first.add([_ev(0), _ev(1)])
+        first.close()
+
+        assert len(SqliteTimeline(db, reset=False)) == 2  # reopen preserving
+        assert len(SqliteTimeline(db)) == 0  # default reset empties it
+
 
 class TestCrossBackendEquivalence:
     def test_identical_input_gives_identical_output(self) -> None:
@@ -157,3 +175,16 @@ class TestCrossBackendEquivalence:
         assert sorted((f.rule_id, f.title) for f in mem.findings) == sorted(
             (f.rule_id, f.title) for f in disk.findings
         )
+
+    def test_rescan_to_same_file_does_not_accumulate(self, tmp_path: Path) -> None:
+        """Re-running a scan to the same --sqlite path must represent that scan, not add to
+        the previous one — otherwise the timeline and findings silently double."""
+        from synth import brute_force_scenario
+        from tracehound import scan
+
+        brute_force_scenario(tmp_path, year=2024)
+        db = tmp_path / "tl.db"
+        first = scan([tmp_path], year=2024, on_disk=db)
+        second = scan([tmp_path], year=2024, on_disk=db)
+        assert len(second.timeline) == len(first.timeline)
+        assert len(second.findings) == len(first.findings)

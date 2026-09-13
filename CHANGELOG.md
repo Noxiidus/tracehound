@@ -7,6 +7,27 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.1] — 2026-09-13
+
+Fixes to the 0.9.0 on-disk timeline, found in a review of the new SQLite backend.
+
+### Fixed
+
+- **Re-scanning to the same `--sqlite` file doubled the timeline.** `SqliteTimeline` created
+  its table with `IF NOT EXISTS` but never cleared existing rows, so a second
+  `tracehound scan … --sqlite timeline.db` against a pre-existing database appended to the
+  previous run — inflating the event count and duplicating findings. A freshly constructed
+  `SqliteTimeline` now starts empty, exactly like `Timeline()`; pass the new `reset=False` to
+  keep what is already stored (the seam a future incremental-scan mode will resume from).
+- **`SqliteTimeline` crashed on non-JSON-native event metadata.** Metadata containing
+  `bytes`, a `set` or another non-serialisable value raised `TypeError` from `json.dumps`,
+  where the in-memory backend accepted it — breaking the "the backends are interchangeable"
+  contract. Such values are now stringified rather than aborting the scan. No built-in parser
+  emits such metadata, so real scans were unaffected; this hardens library use.
+
+A 300-trial randomised cross-backend fuzz (microsecond boundaries, unicode, every query
+method) confirmed the two backends remain byte-for-byte equivalent on realistic events.
+
 ## [0.9.0] — 2026-08-01
 
 Scale. Everything lived in memory, which is fine for a triage snapshot and wrong for a year
