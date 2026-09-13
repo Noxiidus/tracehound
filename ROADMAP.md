@@ -108,9 +108,11 @@ Not a feature release. A promise release. Delivered in [1.0.0](CHANGELOG.md):
   manifest, and the l2tcsv / Timesketch / Sigma exports.
 - **Security policy** — [SECURITY.md](SECURITY.md): private reporting, scope, design stance.
 - **PyPI packaging** — clean sdist/wheel (`twine check` passes) and a Trusted-Publishing
-  (OIDC) `publish.yml` that uploads on a version tag. **One-time step to go live:** configure
-  a PyPI trusted publisher for `tracehound` → repo `Noxiidus/tracehound`, workflow
-  `publish.yml`, environment `pypi`; then `pip install tracehound` works.
+  (OIDC) `publish.yml`. The build runs on every tag (always green); the publish step is off
+  until enabled, so a tag never fails before PyPI is ready. **To go live, once:** add a PyPI
+  trusted publisher for `tracehound` (repo `Noxiidus/tracehound`, workflow `publish.yml`,
+  environment `pypi`) and set the Actions variable `PYPI_ENABLED=true`; then `pip install
+  tracehound` works and every tag publishes.
 
 A 1.0 that cannot be depended on is just a version number.
 

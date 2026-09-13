@@ -1,16 +1,22 @@
 name: Publish to PyPI
 
-# Builds the sdist and wheel on every version tag and publishes them to PyPI via Trusted
-# Publishing (OIDC) — no API token is stored in the repository. One-time setup: on PyPI, add
-# a trusted publisher for the `tracehound` project pointing at this repo and this workflow
-# (Noxiidus/tracehound, workflow `publish.yml`, environment `pypi`). Until that is configured
-# the publish step is the only thing that fails; the build still runs and is downloadable as
-# an artifact.
+# Builds the sdist and wheel on every version tag (always green — it just validates
+# packaging) and publishes to PyPI via Trusted Publishing (OIDC), with no stored token.
+#
+# The publish job stays OFF until you turn it on, so a tag never produces a red failure
+# before PyPI is ready. To enable, once:
+#   1. On PyPI, add a trusted publisher for `tracehound` → owner Noxiidus, repo tracehound,
+#      workflow `publish.yml`, environment `pypi`.
+#   2. In the repo, set an Actions variable `PYPI_ENABLED` to `true`
+#      (Settings → Secrets and variables → Actions → Variables).
+# After that, every `v*` tag publishes automatically; you can also trigger it manually
+# from the Actions tab (Run workflow).
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
   build:
@@ -32,6 +38,8 @@ jobs:
 
   publish:
     needs: build
+    # Skipped (not failed) until PyPI trusted publishing is configured and this is set.
+    if: vars.PYPI_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
